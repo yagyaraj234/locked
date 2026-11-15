@@ -13,6 +13,7 @@ struct LockedApp: App {
         Window("Locked Settings", id: "settings") {
             SettingsView().environment(model)
         }
+        .hiddenAtLaunch()
         .commands {
             // Replaces the default Quit so Cmd-Q is gone too while a session is running.
             CommandGroup(replacing: .appTermination) {
@@ -26,6 +27,18 @@ struct LockedApp: App {
             if let sessionID { EndEarlyView(sessionID: sessionID).environment(model) }
         }
         .windowResizability(.contentSize)
+        .hiddenAtLaunch()
+    }
+}
+
+extension Scene {
+    /// A menu bar app shows no window until asked. macOS 14 has no switch for this,
+    /// so there the Settings window still opens at launch.
+    func hiddenAtLaunch() -> some Scene {
+        if #available(macOS 15, *) {
+            return defaultLaunchBehavior(.suppressed).restorationBehavior(.disabled)
+        }
+        return self
     }
 }
 
@@ -103,7 +116,15 @@ struct PanelView: View {
 
     private func open(_ id: String, _ sessionID: UUID?) {
         if let sessionID { openWindow(id: id, value: sessionID) } else { openWindow(id: id) }
-        NSApp.activate(ignoringOtherApps: true)  // an agent app's windows open behind otherwise
+        // An agent app's windows open behind whatever is in front, and activation alone
+        // doesn't always raise them. The window exists one turn after openWindow.
+        Task {
+            NSApp.activate(ignoringOtherApps: true)
+            for window in NSApp.windows where window.identifier?.rawValue.hasPrefix(id) == true {
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+            }
+        }
     }
 }
 
