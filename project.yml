@@ -1,0 +1,39 @@
+name: Locked
+options:
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    GENERATE_INFOPLIST_FILE: YES
+targets:
+  Locked:
+    type: application
+    platform: macOS
+    sources: [Locked]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yagyaraj.locked
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_NSAppleEventsUsageDescription: Locked reads the address of the front browser tab to redirect sites you have blocked.
+    scheme:
+      testTargets: [LockedTests]
+  # Tests compile the pure policy file directly, so they never launch the app.
+  LockedTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - LockedTests
+      - Locked/Policy.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yagyaraj.locked.tests
