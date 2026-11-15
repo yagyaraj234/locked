@@ -132,6 +132,16 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         #expect(!blocks(rule: "youtube.com/shorts", url: "https://www.youtube.com"))
     }
 
+    @Test func `a path rule matches whole segments, not longer words`() {
+        #expect(blocks(rule: "youtube.com/shorts", url: "https://youtube.com/shorts"))
+        #expect(!blocks(rule: "youtube.com/shorts", url: "https://youtube.com/shortstories"))
+    }
+
+    @Test func `a trailing slash on a path rule changes nothing`() {
+        #expect(SiteRule(parsing: "youtube.com/shorts/") == SiteRule(parsing: "youtube.com/shorts"))
+        #expect(blocks(rule: "youtube.com/shorts/", url: "https://youtube.com/shorts"))
+    }
+
     @Test func `matching ignores www, host case, scheme, port and query`() {
         #expect(blocks(rule: "youtube.com", url: "https://WWW.YouTube.com/"))
         #expect(blocks(rule: "youtube.com", url: "http://youtube.com:8080/feed?x=1"))
@@ -235,6 +245,14 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         #expect(policy.verdict(for: .app(Self.mail), at: nov(9, 10)) == .blocked(sessionID: work.id, goal: "Ship the feature"))
         #expect(policy.verdict(for: .url(URL(string: "https://old.reddit.com/r/all")!), at: nov(9, 10))
             == .blocked(sessionID: work.id, goal: "Ship the feature"))
+    }
+
+    @Test func `a session that lists the target itself gives the goal, even when saved later`() {
+        let deck = Session(name: "Deck", goal: "Finish the deck", apps: [Self.mail])
+        let both = Policy(sessions: [work, deck],
+                          runs: [work, deck].map { ManualRun(sessionID: $0.id, end: nov(9, 11)) },
+                          everySession: BlockList(apps: [Self.mail]))
+        #expect(both.verdict(for: .app(Self.mail), at: nov(9, 10)) == .blocked(sessionID: deck.id, goal: "Finish the deck"))
     }
 
     @Test func `it blocks nothing while no session is active`() {

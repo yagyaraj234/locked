@@ -42,12 +42,16 @@ enum Browser: String, CaseIterable, Identifiable {
     }
 
     // ponytail: compiles a script per call and blocks the main thread while the browser
-    // answers (about once a second, only while a browser is in front), including for as
-    // long as the first-use Automation prompt for that browser stays open. Move to a
-    // background actor with cached scripts if a slow browser ever stalls the UI.
+    // answers (about once a second, only while a browser is in front). The timeout caps
+    // that at a second for a hung browser. Move to a background actor with cached
+    // scripts if even that stalls the UI.
     private func run(_ command: String) -> String? {
         var error: NSDictionary?
-        let result = NSAppleScript(source: "tell application id \"\(rawValue)\" to \(command)")?
+        let result = NSAppleScript(source: """
+            with timeout of 1 second
+            tell application id "\(rawValue)" to \(command)
+            end timeout
+            """)?
             .executeAndReturnError(&error)
         return error == nil ? result?.stringValue : nil
     }

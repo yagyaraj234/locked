@@ -39,12 +39,18 @@ nonisolated struct SiteRule: Codable, Hashable, Sendable {
         let host = Self.normalized(host: rest[..<slash].prefix { $0 != ":" })
         guard !host.isEmpty else { return nil }
         domain = host
-        pathPrefix = rest[slash...] == "/" ? "" : String(rest[slash...])
+        // "youtube.com/shorts/" is the same rule as "youtube.com/shorts".
+        var path = rest[slash...]
+        while path.hasSuffix("/") { path.removeLast() }
+        pathPrefix = String(path)
     }
 
     func matches(_ url: URL) -> Bool {
         guard let host = url.host().map(Self.normalized(host:)) else { return false }
-        return (host == domain || host.hasSuffix("." + domain)) && url.path().hasPrefix(pathPrefix)
+        guard host == domain || host.hasSuffix("." + domain) else { return false }
+        // Whole path segments only: "/shorts" covers "/shorts/abc" but not "/shortstories".
+        let path = url.path()
+        return pathPrefix.isEmpty || path == pathPrefix || path.hasPrefix(pathPrefix + "/")
     }
 
     private static func normalized(host: some StringProtocol) -> String {
@@ -132,12 +138,12 @@ nonisolated struct Policy: Codable, Equatable, Sendable {
     }
 
     func verdict(for target: Target, at now: Date, calendar: Calendar = .current) -> Verdict {
+        let active = activeSessions(at: now, calendar: calendar)
+        // A session that lists the target itself gives the goal, ahead of the every-session list.
+        let own = active.first { blocks(target, apps: $0.session.apps, sites: $0.session.sites) }
         let always = blocks(target, apps: everySession.apps, sites: everySession.sites)
-        for active in activeSessions(at: now, calendar: calendar)
-        where always || blocks(target, apps: active.session.apps, sites: active.session.sites) {
-            return .blocked(sessionID: active.session.id, goal: active.session.goal)
-        }
-        return .allowed
+        guard let match = own ?? (always ? active.first : nil) else { return .allowed }
+        return .blocked(sessionID: match.session.id, goal: match.session.goal)
     }
 
     /// Starts a manual run. Starting again can lengthen a run but never shorten it:

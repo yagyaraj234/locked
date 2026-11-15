@@ -21,9 +21,9 @@ import SwiftUI
             policy = saved
         }
         if !defaults.bool(forKey: "didRegisterLoginItem") {
-            // Once only, so turning the toggle off in Settings sticks.
-            try? SMAppService.mainApp.register()
-            defaults.set(true, forKey: "didRegisterLoginItem")
+            // Once only, so turning the toggle off in Settings sticks. A failure
+            // (say, running from outside /Applications) is tried again next launch.
+            if (try? SMAppService.mainApp.register()) != nil { defaults.set(true, forKey: "didRegisterLoginItem") }
         }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
