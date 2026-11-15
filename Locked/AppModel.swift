@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import ServiceManagement
+import SwiftUI
 
 /// Owns the saved policy, reads the clock, and enforces the policy's verdicts.
 @Observable final class AppModel {
@@ -10,6 +11,7 @@ import ServiceManagement
     private(set) var deniedBrowsers: [Browser] = []
 
     @ObservationIgnored private let blockScreen = BlockScreen()
+    @ObservationIgnored private var onboardingWindow: NSWindow?
     @ObservationIgnored private let defaults = UserDefaults.standard
 
     var sessions: [Session] { policy.sessions }
@@ -31,6 +33,8 @@ import ServiceManagement
         // Everything is recomputed from the clock each second, so schedules,
         // relaunches and wake from sleep need no bookkeeping of their own.
         Task {
+            // Deferred to here because NSApp doesn't exist yet while the App struct is being built.
+            if !defaults.bool(forKey: "didOnboard"), policy.sessions.isEmpty { showOnboarding() }
             while true {
                 tick()
                 try? await Task.sleep(for: .seconds(1))
@@ -74,6 +78,32 @@ import ServiceManagement
 
     func endEarly(_ id: UUID) {
         policy.endEarly(id, at: Date())
+        changed()
+    }
+
+    // MARK: Onboarding
+
+    func showOnboarding() {
+        let window = onboardingWindow ?? NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "Welcome to Locked"
+        window.isReleasedWhenClosed = false
+        window.contentViewController = NSHostingController(rootView: OnboardingView().environment(self))
+        window.layoutIfNeeded()  // size to the content first, or center() centres an empty window
+        window.center()
+        onboardingWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()  // an agent app's windows open behind otherwise
+    }
+
+    /// Ends onboarding. `session` is nil when it was skipped; `list` is added to the every-session list.
+    func finishOnboarding(session: Session?, list: BlockList = BlockList()) {
+        defaults.set(true, forKey: "didOnboard")
+        onboardingWindow?.close()
+        guard let session, active.isEmpty else { return }
+        policy.sessions.append(session)
+        policy.everySession.apps += list.apps.filter { !policy.everySession.apps.contains($0) }
+        policy.everySession.sites += list.sites.filter { !policy.everySession.sites.contains($0) }
         changed()
     }
 

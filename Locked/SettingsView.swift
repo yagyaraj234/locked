@@ -31,6 +31,9 @@ struct SettingsView: View {
                         selection = .session(session.id)
                     }
                     LaunchAtLoginToggle()
+                    Button("Setup Guide…") { model.showOnboarding() }
+                        .buttonStyle(.link)
+                        .disabled(!model.active.isEmpty)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
@@ -74,27 +77,7 @@ private struct SessionEditor: View {
                     TextField("Goal", text: $draft.goal, prompt: Text("Shown when something is blocked"))
                 }
                 BlockListSections(apps: $draft.apps, sites: $draft.sites)
-                Section("Schedule") {
-                    Toggle("Repeat weekly", isOn: Binding { draft.schedule != nil } set: { draft.schedule = $0 ? Schedule() : nil })
-                    if let schedule = Binding($draft.schedule) {
-                        HStack {
-                            ForEach(1...7, id: \.self) { weekday in
-                                Toggle(Calendar.current.veryShortWeekdaySymbols[weekday - 1], isOn: Binding {
-                                    schedule.wrappedValue.weekdays.contains(weekday)
-                                } set: { on in
-                                    if on { schedule.wrappedValue.weekdays.insert(weekday) } else { schedule.wrappedValue.weekdays.remove(weekday) }
-                                })
-                                .toggleStyle(.button)
-                                .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
-                            }
-                        }
-                        DatePicker("Starts", selection: time(schedule.start), displayedComponents: .hourAndMinute)
-                        DatePicker("Ends", selection: time(schedule.end), displayedComponents: .hourAndMinute)
-                        if schedule.wrappedValue.end <= schedule.wrappedValue.start {
-                            Text("Ends the next morning.").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                ScheduleSection(schedule: $draft.schedule)
                 HStack {
                     Button("Delete Session", role: .destructive) { model.delete(session.id) }
                     Spacer()
@@ -106,17 +89,6 @@ private struct SessionEditor: View {
             .disabled(locked)
         }
         .formStyle(.grouped)
-    }
-
-    /// Bridges minutes after midnight to the `Date` a `DatePicker` wants.
-    private func time(_ minutes: Binding<Int>) -> Binding<Date> {
-        let calendar = Calendar.current
-        return Binding {
-            calendar.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: Date()) ?? Date()
-        } set: {
-            let parts = calendar.dateComponents([.hour, .minute], from: $0)
-            minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-        }
     }
 }
 
@@ -141,7 +113,7 @@ private struct EverySessionEditor: View {
 }
 
 /// The Apps and Sites sections, shared by a session and the every-session list.
-private struct BlockListSections: View {
+struct BlockListSections: View {
     @Binding var apps: [String]
     @Binding var sites: [SiteRule]
     @State private var newSite = ""
@@ -190,6 +162,46 @@ private struct BlockListSections: View {
         guard let rule = SiteRule(parsing: newSite) else { return }
         if !sites.contains(rule) { sites.append(rule) }
         newSite = ""
+    }
+}
+
+/// Weekly repeat, weekdays and times. Off means the session only runs by hand.
+struct ScheduleSection: View {
+    @Binding var schedule: Schedule?
+
+    var body: some View {
+        Section("Schedule") {
+            Toggle("Repeat weekly", isOn: Binding { schedule != nil } set: { schedule = $0 ? Schedule() : nil })
+            if let schedule = Binding($schedule) {
+                HStack {
+                    ForEach(1...7, id: \.self) { weekday in
+                        Toggle(Calendar.current.veryShortWeekdaySymbols[weekday - 1], isOn: Binding {
+                            schedule.wrappedValue.weekdays.contains(weekday)
+                        } set: { on in
+                            if on { schedule.wrappedValue.weekdays.insert(weekday) } else { schedule.wrappedValue.weekdays.remove(weekday) }
+                        })
+                        .toggleStyle(.button)
+                        .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
+                    }
+                }
+                DatePicker("Starts", selection: time(schedule.start), displayedComponents: .hourAndMinute)
+                DatePicker("Ends", selection: time(schedule.end), displayedComponents: .hourAndMinute)
+                if schedule.wrappedValue.end <= schedule.wrappedValue.start {
+                    Text("Ends the next morning.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// Bridges minutes after midnight to the `Date` a `DatePicker` wants.
+    private func time(_ minutes: Binding<Int>) -> Binding<Date> {
+        let calendar = Calendar.current
+        return Binding {
+            calendar.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: Date()) ?? Date()
+        } set: {
+            let parts = calendar.dateComponents([.hour, .minute], from: $0)
+            minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
     }
 }
 

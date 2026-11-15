@@ -19,6 +19,8 @@ The build is ad-hoc signed, so macOS re-asks for browser Automation access after
 - Apps are hidden, never quit, and covered by a full-screen block screen.
 - Sites are caught by reading the front tab's address about once a second through Apple Events. macOS asks for Automation access the first time each browser is read.
 
+- On first launch a short setup asks for a goal, what to block and when, and creates the first session from the answers. It can be run again from Settings (Setup Guide…). What you pick there goes into the Every Session list, which is blocked whenever any session is active.
+
 ### Block page
 
 Tried on 2026-11-15 by redirecting a tab through Apple Events:
