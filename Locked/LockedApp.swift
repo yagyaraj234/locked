@@ -67,6 +67,13 @@ struct PanelView: View {
                 }
             }
 
+            let everySession = model.policy.everySession
+            if !model.active.isEmpty, !(everySession.apps.isEmpty && everySession.sites.isEmpty) {
+                Text("Every session: " + (everySession.apps.map(appName) + everySession.sites.map(\.text)).joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             if !model.sessions.isEmpty {
                 Divider()
                 HStack {

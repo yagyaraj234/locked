@@ -4,20 +4,31 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @State private var selection: UUID?
+    @State private var selection: Selection? = .everySession
+
+    private enum Selection: Hashable {
+        case everySession
+        case session(UUID)
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(model.sessions, selection: $selection) { session in
-                Label(session.name.isEmpty ? "Untitled" : session.name,
-                      systemImage: model.isActive(session.id) ? "lock.fill" : "lock.open")
+            List(selection: $selection) {
+                Label("Every Session", systemImage: "square.stack.3d.up").tag(Selection.everySession)
+                Section("Sessions") {
+                    ForEach(model.sessions) { session in
+                        Label(session.name.isEmpty ? "Untitled" : session.name,
+                              systemImage: model.isActive(session.id) ? "lock.fill" : "lock.open")
+                            .tag(Selection.session(session.id))
+                    }
+                }
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading) {
                     Button("New Session", systemImage: "plus") {
                         let session = Session(name: "New session")
                         model.save(session)
-                        selection = session.id
+                        selection = .session(session.id)
                     }
                     LaunchAtLoginToggle()
                 }
@@ -26,7 +37,9 @@ struct SettingsView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
-            if let session = model.sessions.first(where: { $0.id == selection }) {
+            if selection == .everySession {
+                EverySessionEditor()
+            } else if let session = model.sessions.first(where: { selection == .session($0.id) }) {
                 SessionEditor(session: session, locked: model.isActive(session.id))
                     .id(session.id)
             } else {
@@ -43,7 +56,6 @@ private struct SessionEditor: View {
     let locked: Bool
     @Environment(AppModel.self) private var model
     @State private var draft: Session
-    @State private var newSite = ""
 
     init(session: Session, locked: Bool) {
         self.session = session
@@ -61,19 +73,7 @@ private struct SessionEditor: View {
                     TextField("Name", text: $draft.name)
                     TextField("Goal", text: $draft.goal, prompt: Text("Shown when something is blocked"))
                 }
-                Section("Apps") {
-                    ForEach(draft.apps, id: \.self) { bundleID in
-                        row(appName(bundleID)) { draft.apps.removeAll { $0 == bundleID } }
-                    }
-                    Button("Add Apps…", action: pickApps)
-                }
-                Section("Sites") {
-                    ForEach(draft.sites, id: \.self) { rule in
-                        row(rule.text) { draft.sites.removeAll { $0 == rule } }
-                    }
-                    TextField("Add a site", text: $newSite, prompt: Text("youtube.com or youtube.com/shorts"))
-                        .onSubmit(addSite)
-                }
+                BlockListSections(apps: $draft.apps, sites: $draft.sites)
                 Section("Schedule") {
                     Toggle("Repeat weekly", isOn: Binding { draft.schedule != nil } set: { draft.schedule = $0 ? Schedule() : nil })
                     if let schedule = Binding($draft.schedule) {
@@ -98,17 +98,71 @@ private struct SessionEditor: View {
                 HStack {
                     Button("Delete Session", role: .destructive) { model.delete(session.id) }
                     Spacer()
-                    Button("Save") {
-                        addSite()
-                        model.save(draft)
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(draft == session && newSite.isEmpty)
+                    Button("Save") { model.save(draft) }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(draft == session)
                 }
             }
             .disabled(locked)
         }
         .formStyle(.grouped)
+    }
+
+    /// Bridges minutes after midnight to the `Date` a `DatePicker` wants.
+    private func time(_ minutes: Binding<Int>) -> Binding<Date> {
+        let calendar = Calendar.current
+        return Binding {
+            calendar.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: Date()) ?? Date()
+        } set: {
+            let parts = calendar.dateComponents([.hour, .minute], from: $0)
+            minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
+    }
+}
+
+/// Blocked in every session, so common distractions are listed once.
+private struct EverySessionEditor: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let list = Binding { model.policy.everySession } set: { model.setEverySession($0) }
+        Form {
+            if model.active.isEmpty {
+                Text("Blocked whenever any session is active, on top of that session's own apps and sites.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("A session is active. This list can't be changed until it ends.", systemImage: "lock.fill")
+            }
+            BlockListSections(apps: list.apps, sites: list.sites)
+                .disabled(!model.active.isEmpty)
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// The Apps and Sites sections, shared by a session and the every-session list.
+private struct BlockListSections: View {
+    @Binding var apps: [String]
+    @Binding var sites: [SiteRule]
+    @State private var newSite = ""
+
+    var body: some View {
+        Section("Apps") {
+            ForEach(apps, id: \.self) { bundleID in
+                row(appName(bundleID)) { apps.removeAll { $0 == bundleID } }
+            }
+            Button("Add Apps…", action: pickApps)
+        }
+        Section("Sites") {
+            ForEach(sites, id: \.self) { rule in
+                row(rule.text) { sites.removeAll { $0 == rule } }
+            }
+            HStack {
+                TextField("Add a site", text: $newSite, prompt: Text("youtube.com or youtube.com/shorts"))
+                    .onSubmit(addSite)
+                Button("Add", action: addSite).disabled(SiteRule(parsing: newSite) == nil)
+            }
+        }
     }
 
     private func row(_ title: String, remove: @escaping () -> Void) -> some View {
@@ -127,26 +181,15 @@ private struct SessionEditor: View {
         panel.allowedContentTypes = [.application]
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return }
-        for id in panel.urls.compactMap({ Bundle(url: $0)?.bundleIdentifier }) where !draft.apps.contains(id) {
-            draft.apps.append(id)
+        for id in panel.urls.compactMap({ Bundle(url: $0)?.bundleIdentifier }) where !apps.contains(id) {
+            apps.append(id)
         }
     }
 
     private func addSite() {
         guard let rule = SiteRule(parsing: newSite) else { return }
-        if !draft.sites.contains(rule) { draft.sites.append(rule) }
+        if !sites.contains(rule) { sites.append(rule) }
         newSite = ""
-    }
-
-    /// Bridges minutes after midnight to the `Date` a `DatePicker` wants.
-    private func time(_ minutes: Binding<Int>) -> Binding<Date> {
-        let calendar = Calendar.current
-        return Binding {
-            calendar.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: Date()) ?? Date()
-        } set: {
-            let parts = calendar.dateComponents([.hour, .minute], from: $0)
-            minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-        }
     }
 }
 

@@ -225,3 +225,30 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         #expect(policy.activeSessions(at: nov(9, 11), calendar: utc).first?.end == nov(9, 12))
     }
 }
+
+@Suite struct EverySessionList {
+    static let mail = "com.apple.mail"
+    let policy = Policy(sessions: [work], runs: [ManualRun(sessionID: work.id, end: nov(9, 11))],
+                        everySession: BlockList(apps: [mail, "com.apple.finder"], sites: [SiteRule(parsing: "reddit.com")!]))
+
+    @Test func `its apps and sites are blocked in a session that doesn't list them, with that session's goal`() {
+        #expect(policy.verdict(for: .app(Self.mail), at: nov(9, 10)) == .blocked(sessionID: work.id, goal: "Ship the feature"))
+        #expect(policy.verdict(for: .url(URL(string: "https://old.reddit.com/r/all")!), at: nov(9, 10))
+            == .blocked(sessionID: work.id, goal: "Ship the feature"))
+    }
+
+    @Test func `it blocks nothing while no session is active`() {
+        #expect(policy.verdict(for: .app(Self.mail), at: nov(9, 11)) == .allowed)
+    }
+
+    @Test func `it can't block Finder either`() {
+        #expect(policy.verdict(for: .app("com.apple.finder"), at: nov(9, 10)) == .allowed)
+    }
+
+    @Test func `sessions saved before the list existed still load`() throws {
+        let saved = #"{"sessions":[{"id":"6F1B0C5E-2B7A-4E0E-9B55-0D9C6E1D2A11","name":"Work","goal":"Ship","apps":["com.apple.mail"],"sites":[]}],"runs":[],"suppressions":[]}"#
+        let policy = try JSONDecoder().decode(Policy.self, from: Data(saved.utf8))
+        #expect(policy.sessions.map(\.name) == ["Work"])
+        #expect(policy.everySession == BlockList())
+    }
+}

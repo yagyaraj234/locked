@@ -14,6 +14,13 @@ nonisolated struct Session: Codable, Identifiable, Equatable, Sendable {
     var schedule: Schedule?
 }
 
+/// Apps and sites blocked whenever any session is active, on top of that session's own lists.
+nonisolated struct BlockList: Codable, Equatable, Sendable {
+    /// Bundle identifiers.
+    var apps: [String] = []
+    var sites: [SiteRule] = []
+}
+
 /// A domain, optionally narrowed to a path prefix. Build one with `init(parsing:)`,
 /// which is what keeps `domain` lowercase and free of scheme, port and `www.`.
 nonisolated struct SiteRule: Codable, Hashable, Sendable {
@@ -110,6 +117,7 @@ nonisolated struct Policy: Codable, Equatable, Sendable {
     var sessions: [Session] = []
     var runs: [ManualRun] = []
     var suppressions: [Suppression] = []
+    var everySession = BlockList()
 
     /// The sessions active at `now`, in saved order.
     func activeSessions(at now: Date, calendar: Calendar = .current) -> [ActiveSession] {
@@ -124,7 +132,9 @@ nonisolated struct Policy: Codable, Equatable, Sendable {
     }
 
     func verdict(for target: Target, at now: Date, calendar: Calendar = .current) -> Verdict {
-        for active in activeSessions(at: now, calendar: calendar) where active.session.blocks(target) {
+        let always = blocks(target, apps: everySession.apps, sites: everySession.sites)
+        for active in activeSessions(at: now, calendar: calendar)
+        where always || blocks(target, apps: active.session.apps, sites: active.session.sites) {
             return .blocked(sessionID: active.session.id, goal: active.session.goal)
         }
         return .allowed
@@ -150,13 +160,22 @@ nonisolated struct Policy: Codable, Equatable, Sendable {
     }
 }
 
-private nonisolated extension Session {
-    func blocks(_ target: Target) -> Bool {
-        switch target {
-        case .app(let bundleID):
-            !Policy.neverBlocked.contains(bundleID) && apps.contains(bundleID)
-        case .url(let url):
-            sites.contains { $0.matches(url) }
-        }
+nonisolated extension Policy {
+    /// Written out so data saved before `everySession` existed still loads.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessions = try container.decode([Session].self, forKey: .sessions)
+        runs = try container.decode([ManualRun].self, forKey: .runs)
+        suppressions = try container.decode([Suppression].self, forKey: .suppressions)
+        everySession = try container.decodeIfPresent(BlockList.self, forKey: .everySession) ?? BlockList()
+    }
+}
+
+private nonisolated func blocks(_ target: Target, apps: [String], sites: [SiteRule]) -> Bool {
+    switch target {
+    case .app(let bundleID):
+        !Policy.neverBlocked.contains(bundleID) && apps.contains(bundleID)
+    case .url(let url):
+        sites.contains { $0.matches(url) }
     }
 }

@@ -60,6 +60,13 @@ import ServiceManagement
         changed()
     }
 
+    /// Locked while any session is active, since it applies to all of them.
+    func setEverySession(_ list: BlockList) {
+        guard active.isEmpty else { return }
+        policy.everySession = list
+        changed()
+    }
+
     func start(_ id: UUID, minutes: Int) {
         policy.start(id, until: Date().addingTimeInterval(TimeInterval(minutes * 60)))
         changed()
@@ -83,7 +90,8 @@ import ServiceManagement
         if nowActive != active { active = nowActive }
 
         // Browser permission only matters once some session blocks a site.
-        let usesSites = policy.sessions.contains { !$0.sites.isEmpty }
+        let sitesEverySession = !policy.everySession.sites.isEmpty
+        let usesSites = sitesEverySession || policy.sessions.contains { !$0.sites.isEmpty }
         let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
         let denied = usesSites ? Browser.allCases.filter { running.contains($0.rawValue) && $0.automationDenied } : []
         if denied != deniedBrowsers { deniedBrowsers = denied }
@@ -93,7 +101,7 @@ import ServiceManagement
             front.hide()  // never terminate: unsaved work stays safe
             blockScreen.show(goal: goal)
         } else if let browser = Browser(rawValue: bundleID), !denied.contains(browser),
-                  nowActive.contains(where: { !$0.session.sites.isEmpty }),
+                  nowActive.contains(where: { sitesEverySession || !$0.session.sites.isEmpty }),
                   let url = browser.frontURL(),
                   case .blocked(_, let goal) = policy.verdict(for: .url(url), at: now) {
             if browser.redirect(showing: goal) == .needsBlockScreen { blockScreen.show(goal: goal) }
