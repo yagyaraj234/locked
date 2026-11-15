@@ -32,13 +32,9 @@ struct LockedApp: App {
 }
 
 extension Scene {
-    /// A menu bar app shows no window until asked. macOS 14 has no switch for this,
-    /// so there the Settings window still opens at launch.
+    /// A menu bar app shows no window until asked.
     func hiddenAtLaunch() -> some Scene {
-        if #available(macOS 15, *) {
-            return defaultLaunchBehavior(.suppressed).restorationBehavior(.disabled)
-        }
-        return self
+        defaultLaunchBehavior(.suppressed).restorationBehavior(.disabled)
     }
 }
 
@@ -97,7 +93,8 @@ struct PanelView: View {
                         .font(.caption)
                     Spacer()
                     Button("Allow…") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
+                        if browser.kind == .gecko { Task { await browser.requestPermission() } }
+                        NSWorkspace.shared.open(browser.permissionPane)
                     }
                 }
             }
@@ -154,6 +151,7 @@ struct EndEarlyView: View {
         .padding(32)
         .frame(width: 360)
         // Restarts whenever the window gains or loses focus, which is what resets the count.
+        // Switching desktops changes no focus, so the loop checks for that itself.
         .task(id: activeState) {
             remaining = 60
             guard model.isActive(sessionID) else { return dismiss() }
@@ -161,7 +159,8 @@ struct EndEarlyView: View {
             while remaining > 0 {
                 try? await Task.sleep(for: .seconds(1))
                 if Task.isCancelled { return }
-                remaining -= 1
+                // On another desktop the window stays key, so focus alone doesn't catch it.
+                if NSApp.keyWindow?.isOnActiveSpace == true { remaining -= 1 } else { remaining = 60 }
             }
             if model.isActive(sessionID) { model.endEarly(sessionID) }  // it may have ended by itself meanwhile
             dismiss()

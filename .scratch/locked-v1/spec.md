@@ -80,7 +80,7 @@ Locked is a personal macOS menu bar app. I define named sessions, each with a go
 
 ## Implementation Decisions
 
-- **Platform and stack:** macOS 14+, Swift and SwiftUI, a menu bar app built on `MenuBarExtra`, a single app target plus a test target, no third-party dependencies.
+- **Platform and stack:** macOS 15+, Swift and SwiftUI, a menu bar app built on `MenuBarExtra`, a single app target plus a test target, no third-party dependencies.
 - **Project:** the Xcode project is generated from a `project.yml` with `xcodegen`; the generated project is git-ignored. Bundle ID `com.yagyaraj.locked`. The app is an agent app with no Dock icon.
 - **Sandbox and distribution:** unsandboxed, run locally from Xcode. No App Store, no notarization.
 - **Signing:** ad-hoc to begin with. macOS ties the Automation permission to the signature, so ad-hoc builds re-prompt for browser access after each rebuild. The owner signs in to Xcode with a free Apple ID to get a personal development certificate; the project then switches to it. This is a manual step for the owner, not agent work.

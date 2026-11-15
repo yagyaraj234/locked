@@ -13,8 +13,11 @@ struct OnboardingView: View {
     @State private var newSite = ""
     @State private var when = When.work
     @FocusState private var goalFocused: Bool
+    /// Supported browsers installed here, each needing a permission before sites can be blocked.
+    @State private var browsers = Browser.installed
+    @State private var granted: Set<String> = []
 
-    private static let lastStep = 4
+    private static let lastStep = 5
     private static let intro = ["Some apps are easy to open and hard to leave.", "Locked keeps them shut while you work."]
 
     /// Everything the answers block: the picked kinds, then anything added by hand.
@@ -39,6 +42,8 @@ struct OnboardingView: View {
         switch step {
         case 1: !goal.trimmingCharacters(in: .whitespaces).isEmpty
         case 2: !list.apps.isEmpty || !list.sites.isEmpty
+        // No session is created until Locked can actually see every browser.
+        case 4: browsers.allSatisfy { granted.contains($0.id) }
         default: true
         }
     }
@@ -66,6 +71,7 @@ struct OnboardingView: View {
                     case 1: goalStep
                     case 2: distractionStep
                     case 3: whenStep
+                    case 4: permissionStep
                     default: summaryStep
                     }
                 }
@@ -209,6 +215,54 @@ struct OnboardingView: View {
             }
             .frame(width: 420)
         }
+    }
+
+    private var permissionStep: some View {
+        VStack(spacing: 22) {
+            question("Let Locked see your browsers.", browsers.isEmpty
+                     ? "No supported browser found, so there is nothing to allow."
+                     : "Locked reads the address of the front tab to block sites. Allow each one to continue.")
+            VStack(spacing: 10) {
+                ForEach(browsers) { browser in
+                    let isOn = granted.contains(browser.id)
+                    HStack(spacing: 14) {
+                        Image(nsImage: icon(of: browser)).resizable().frame(width: 28, height: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(browser.name).font(.headline)
+                            Text(browser.kind == .gecko ? "Accessibility" : "Automation").font(.callout).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if isOn {
+                            Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        } else {
+                            Button("Allow") {
+                                Task {
+                                    await browser.requestPermission()
+                                    // A denied or Accessibility prompt ends in System Settings.
+                                    if !browser.permissionGranted { NSWorkspace.shared.open(browser.permissionPane) }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 56)
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .frame(width: 420)
+        }
+        // Granting happens elsewhere (a system prompt, System Settings), so look again each second.
+        .task {
+            while !Task.isCancelled {
+                granted = Set(browsers.filter(\.permissionGranted).map(\.id))
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func icon(of browser: Browser) -> NSImage {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.id)
+            .map { NSWorkspace.shared.icon(forFile: $0.path) } ?? NSImage()
     }
 
     private var summaryStep: some View {

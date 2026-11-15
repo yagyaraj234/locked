@@ -13,6 +13,8 @@ import SwiftUI
     @ObservationIgnored private let blockScreen = BlockScreen()
     @ObservationIgnored private var onboardingWindow: NSWindow?
     @ObservationIgnored private let defaults = UserDefaults.standard
+    /// One browser read at a time: a slow or prompting browser must not queue up a read per tick.
+    @ObservationIgnored private var readingBrowser = false
 
     var sessions: [Session] { policy.sessions }
 
@@ -127,18 +129,22 @@ import SwiftUI
         let sitesEverySession = !policy.everySession.sites.isEmpty
         let usesSites = sitesEverySession || policy.sessions.contains { !$0.sites.isEmpty }
         let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
-        let denied = usesSites ? Browser.allCases.filter { running.contains($0.rawValue) && $0.automationDenied } : []
+        let denied = usesSites ? running.compactMap(Browser.of).filter(\.permissionDenied).sorted { $0.name < $1.name } : []
         if denied != deniedBrowsers { deniedBrowsers = denied }
 
         guard let front = NSWorkspace.shared.frontmostApplication, let bundleID = front.bundleIdentifier else { return }
         if case .blocked(_, let goal) = policy.verdict(for: .app(bundleID), at: now) {
             front.hide()  // never terminate: unsaved work stays safe
             blockScreen.show(goal: goal)
-        } else if let browser = Browser(rawValue: bundleID), !denied.contains(browser),
-                  nowActive.contains(where: { sitesEverySession || !$0.session.sites.isEmpty }),
-                  let url = browser.frontURL(),
-                  case .blocked(_, let goal) = policy.verdict(for: .url(url), at: now) {
-            if browser.redirect(showing: goal) == .needsBlockScreen { blockScreen.show(goal: goal) }
+        } else if let browser = Browser.of(bundleID), !denied.contains(browser),
+                  nowActive.contains(where: { sitesEverySession || !$0.session.sites.isEmpty }), !readingBrowser {
+            readingBrowser = true
+            Task {
+                defer { readingBrowser = false }
+                guard let url = await browser.frontURL(),
+                      case .blocked(_, let goal) = policy.verdict(for: .url(url), at: Date()) else { return }
+                if await browser.redirect(showing: goal) == .needsBlockScreen { blockScreen.show(goal: goal) }
+            }
         }
     }
 }

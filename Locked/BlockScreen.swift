@@ -17,7 +17,9 @@ final class BlockScreen {
 
     func show(goal: String) {
         window.contentView = NSHostingView(rootView: BlockView(goal: goal) { [window] in window.orderOut(nil) })
-        window.setFrame(NSScreen.main?.frame ?? .zero, display: true)
+        // The display the pointer is on, which is where the blocked app was being used.
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        window.setFrame(screen?.frame ?? .zero, display: true)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
