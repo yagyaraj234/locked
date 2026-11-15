@@ -148,14 +148,7 @@ struct BlockListSections: View {
     }
 
     private func pickApps() {
-        let panel = NSOpenPanel()
-        panel.directoryURL = URL(filePath: "/Applications")
-        panel.allowedContentTypes = [.application]
-        panel.allowsMultipleSelection = true
-        guard panel.runModal() == .OK else { return }
-        for id in panel.urls.compactMap({ Bundle(url: $0)?.bundleIdentifier }) where !apps.contains(id) {
-            apps.append(id)
-        }
+        apps += chooseApps().filter { !apps.contains($0) }
     }
 
     private func addSite() {
@@ -192,16 +185,26 @@ struct ScheduleSection: View {
             }
         }
     }
+}
 
-    /// Bridges minutes after midnight to the `Date` a `DatePicker` wants.
-    private func time(_ minutes: Binding<Int>) -> Binding<Date> {
-        let calendar = Calendar.current
-        return Binding {
-            calendar.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: Date()) ?? Date()
-        } set: {
-            let parts = calendar.dateComponents([.hour, .minute], from: $0)
-            minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-        }
+/// The standard open panel, rooted at Applications. Returns the bundle IDs chosen.
+func chooseApps() -> [String] {
+    let panel = NSOpenPanel()
+    panel.directoryURL = URL(filePath: "/Applications")
+    panel.allowedContentTypes = [.application]
+    panel.allowsMultipleSelection = true
+    guard panel.runModal() == .OK else { return [] }
+    return panel.urls.compactMap { Bundle(url: $0)?.bundleIdentifier }
+}
+
+/// Bridges minutes after midnight to the `Date` a `DatePicker` wants.
+func time(_ minutes: Binding<Int>) -> Binding<Date> {
+    let calendar = Calendar.current
+    return Binding {
+        calendar.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: Date()) ?? Date()
+    } set: {
+        let parts = calendar.dateComponents([.hour, .minute], from: $0)
+        minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
     }
 }
 

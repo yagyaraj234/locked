@@ -84,8 +84,12 @@ import SwiftUI
     // MARK: Onboarding
 
     func showOnboarding() {
-        let window = onboardingWindow ?? NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let window = onboardingWindow ?? NSWindow(contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView],
+                                                  backing: .buffered, defer: false)
         window.title = "Welcome to Locked"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: OnboardingView().environment(self))
         window.layoutIfNeeded()  // size to the content first, or center() centres an empty window
