@@ -82,8 +82,10 @@ import ServiceManagement
         let nowActive = policy.activeSessions(at: now)
         if nowActive != active { active = nowActive }
 
+        // Browser permission only matters once some session blocks a site.
+        let usesSites = policy.sessions.contains { !$0.sites.isEmpty }
         let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
-        let denied = Browser.allCases.filter { running.contains($0.rawValue) && $0.automationDenied }
+        let denied = usesSites ? Browser.allCases.filter { running.contains($0.rawValue) && $0.automationDenied } : []
         if denied != deniedBrowsers { deniedBrowsers = denied }
 
         guard let front = NSWorkspace.shared.frontmostApplication, let bundleID = front.bundleIdentifier else { return }

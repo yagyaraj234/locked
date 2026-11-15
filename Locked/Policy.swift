@@ -27,6 +27,7 @@ nonisolated struct SiteRule: Codable, Hashable, Sendable {
     init?(parsing input: String) {
         var rest = Substring(input.trimmingCharacters(in: .whitespacesAndNewlines))
         if let scheme = rest.range(of: "://") { rest = rest[scheme.upperBound...] }
+        rest = rest.prefix { $0 != "?" && $0 != "#" }
         let slash = rest.firstIndex(of: "/") ?? rest.endIndex
         let host = Self.normalized(host: rest[..<slash].prefix { $0 != ":" })
         guard !host.isEmpty else { return nil }
@@ -40,7 +41,9 @@ nonisolated struct SiteRule: Codable, Hashable, Sendable {
     }
 
     private static func normalized(host: some StringProtocol) -> String {
-        let host = host.lowercased()
+        // "youtube.com." is the same site as "youtube.com", and browsers load it.
+        var host = host.lowercased()
+        if host.hasSuffix(".") { host.removeLast() }
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 }
@@ -127,10 +130,12 @@ nonisolated struct Policy: Codable, Equatable, Sendable {
         return .allowed
     }
 
-    /// Starts a manual run, replacing any earlier one for the same session.
+    /// Starts a manual run. Starting again can lengthen a run but never shorten it:
+    /// the only way to end sooner is `endEarly`.
     mutating func start(_ sessionID: UUID, until end: Date) {
+        let latest = runs.filter { $0.sessionID == sessionID }.map(\.end).max()
         runs.removeAll { $0.sessionID == sessionID }
-        runs.append(ManualRun(sessionID: sessionID, end: end))
+        runs.append(ManualRun(sessionID: sessionID, end: max(end, latest ?? end)))
     }
 
     /// Ends a session now: drops its manual run and, if it is inside a scheduled

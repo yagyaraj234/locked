@@ -42,7 +42,8 @@ enum Browser: String, CaseIterable, Identifiable {
     }
 
     // ponytail: compiles a script per call and blocks the main thread while the browser
-    // answers (about once a second, only while a browser is in front). Move to a
+    // answers (about once a second, only while a browser is in front), including for as
+    // long as the first-use Automation prompt for that browser stays open. Move to a
     // background actor with cached scripts if a slow browser ever stalls the UI.
     private func run(_ command: String) -> String? {
         var error: NSDictionary?

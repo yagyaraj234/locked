@@ -137,6 +137,14 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         #expect(blocks(rule: "youtube.com", url: "http://youtube.com:8080/feed?x=1"))
     }
 
+    @Test func `a host written with a trailing dot is still blocked`() {
+        #expect(blocks(rule: "youtube.com", url: "https://youtube.com./"))
+    }
+
+    @Test func `a pasted address loses its query and fragment`() {
+        #expect(SiteRule(parsing: "https://youtube.com/shorts?x=1#top")?.text == "youtube.com/shorts")
+    }
+
     @Test func `a rule typed as a full address is reduced to its domain and path`() {
         #expect(SiteRule(parsing: " https://www.YouTube.com/ ") == SiteRule(parsing: "youtube.com"))
         #expect(SiteRule(parsing: "http://Reddit.com/r/all")?.text == "reddit.com/r/all")
@@ -200,6 +208,14 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
                             runs: [ManualRun(sessionID: Overlap.sprint.id, end: nov(9, 11))])
         policy.endEarly(Overlap.office.id, at: nov(9, 10), calendar: utc)
         #expect(policy.activeSessions(at: nov(9, 10), calendar: utc).map(\.session.name) == ["Sprint"])
+    }
+
+    @Test func `starting an active session again can't shorten it`() {
+        var policy = Policy(sessions: [work], runs: [ManualRun(sessionID: work.id, end: nov(9, 12))])
+        policy.start(work.id, until: nov(9, 10, 15))
+        #expect(policy.activeSessions(at: nov(9, 10), calendar: utc).first?.end == nov(9, 12))
+        policy.start(work.id, until: nov(9, 13))
+        #expect(policy.activeSessions(at: nov(9, 10), calendar: utc).first?.end == nov(9, 13))
     }
 
     @Test func `a session can be started by hand again after being ended early`() {

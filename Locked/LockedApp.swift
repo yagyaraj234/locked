@@ -13,6 +13,14 @@ struct LockedApp: App {
         Window("Locked Settings", id: "settings") {
             SettingsView().environment(model)
         }
+        .commands {
+            // Replaces the default Quit so Cmd-Q is gone too while a session is running.
+            CommandGroup(replacing: .appTermination) {
+                if model.active.isEmpty {
+                    Button("Quit Locked") { NSApp.terminate(nil) }.keyboardShortcut("q")
+                }
+            }
+        }
 
         WindowGroup("End Session Early", id: "end-early", for: UUID.self) { $sessionID in
             if let sessionID { EndEarlyView(sessionID: sessionID).environment(model) }
@@ -49,7 +57,7 @@ struct PanelView: View {
             if !model.sessions.isEmpty {
                 Divider()
                 HStack {
-                    Picker("Session", selection: Binding { picked ?? model.sessions.first?.id } set: { picked = $0 }) {
+                    Picker("Session", selection: Binding { sessionToStart } set: { picked = $0 }) {
                         ForEach(model.sessions) { Text($0.name).tag(Optional($0.id)) }
                     }
                     Picker("Duration", selection: $minutes) {
@@ -57,7 +65,7 @@ struct PanelView: View {
                     }
                     .fixedSize()
                     Button("Start now") {
-                        if let id = picked ?? model.sessions.first?.id { model.start(id, minutes: minutes) }
+                        if let sessionToStart { model.start(sessionToStart, minutes: minutes) }
                     }
                 }
                 .labelsHidden()
@@ -86,6 +94,11 @@ struct PanelView: View {
         }
         .padding()
         .frame(width: 340)
+    }
+
+    /// The picked session, or the first one if nothing is picked or the pick was deleted.
+    private var sessionToStart: UUID? {
+        model.sessions.contains { $0.id == picked } ? picked : model.sessions.first?.id
     }
 
     private func open(_ id: String, _ sessionID: UUID?) {
@@ -122,7 +135,7 @@ struct EndEarlyView: View {
                 if Task.isCancelled { return }
                 remaining -= 1
             }
-            model.endEarly(sessionID)
+            if model.isActive(sessionID) { model.endEarly(sessionID) }  // it may have ended by itself meanwhile
             dismiss()
         }
     }
