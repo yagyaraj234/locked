@@ -4,8 +4,8 @@ import ApplicationServices
 /// A browser whose front tab Locked can read and redirect. Any Chromium or Firefox-family
 /// browser qualifies: it is recognised from its app bundle, so there is no list to keep up.
 struct Browser: Identifiable, Hashable {
-    /// How the tab is reached. Safari and Chromium answer Apple Events; Gecko (Firefox, Zen,
-    /// LibreWolf, Floorp…) has no scripting, so it is read through Accessibility.
+    /// The engine. Every kind is read and redirected through Accessibility, so one
+    /// permission covers them all; the kind only decides how a redirect is confirmed.
     enum Kind { case safari, chromium, gecko }
     enum Redirect { case blockPage, needsBlockScreen }
 
@@ -31,7 +31,7 @@ struct Browser: Identifiable, Hashable {
         if fm.fileExists(atPath: contents.appending(path: "MacOS/XUL").path) {
             return Browser(id: bundleID, kind: .gecko)
         }
-        // Chromium: scriptable, and carries Chromium's resource pack in its framework.
+        // Chromium: scriptable (which Electron apps are not), and carries Chromium's resource pack in its framework.
         let frameworks = (try? fm.contentsOfDirectory(at: contents.appending(path: "Frameworks"), includingPropertiesForKeys: nil)) ?? []
         let scriptable = Bundle(url: app)?.object(forInfoDictionaryKey: "NSAppleScriptEnabled") as? Bool == true
         if scriptable, frameworks.contains(where: {
@@ -51,119 +51,70 @@ struct Browser: Identifiable, Hashable {
 
     // MARK: Permission
 
-    private var appleEventStatus: OSStatus {
-        let target = NSAppleEventDescriptor(bundleIdentifier: id)
-        return AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, false)
-    }
+    /// One Accessibility permission for Locked covers every browser.
+    static var permissionGranted: Bool { AXIsProcessTrusted() }
 
-    /// Denied outright. An undecided permission isn't a warning: macOS asks on the first read.
-    var permissionDenied: Bool {
-        kind == .gecko ? !AXIsProcessTrusted() : appleEventStatus == OSStatus(errAEEventNotPermitted)
-    }
+    static let permissionPane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
 
-    /// Decided yes. A browser that isn't running can't be asked, so it counts as not yet.
-    var permissionGranted: Bool {
-        kind == .gecko ? AXIsProcessTrusted() : appleEventStatus == noErr
-    }
-
-    /// Opens the System Settings pane where the permission is granted.
-    var permissionPane: URL {
-        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_" + (kind == .gecko ? "Accessibility" : "Automation"))!
-    }
-
-    /// Shows macOS's own prompt. An Automation prompt needs the browser running, so a closed
-    /// one is opened out of sight first. Accessibility has no answer to wait for: the prompt
-    /// points at System Settings, and the caller polls `permissionGranted`.
-    func requestPermission() async {
-        if kind == .gecko {
-            _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-            return
-        }
-        if pid == 0, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = false
-            configuration.hides = true
-            _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
-        }
-        await askAppleEvents()
-    }
-
-    // Blocks until the prompt is answered, so never on the main thread.
-    @concurrent private func askAppleEvents() async {
-        let target = NSAppleEventDescriptor(bundleIdentifier: id)
-        _ = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, true)
+    /// Shows macOS's own prompt. It has no answer to wait for: it points at System
+    /// Settings, and the caller polls `permissionGranted`.
+    static func requestPermission() {
+        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
 
     // MARK: Reading and redirecting
-
-    private var tab: String { kind == .safari ? "current tab of front window" : "active tab of front window" }
-
-    /// The URL of the front tab; `nil` when there is no window, no page, or no permission.
-    func frontURL() async -> URL? {
-        if kind == .gecko { return await Self.geckoURL(pid: pid) }
-        return await run("get URL of \(tab)").flatMap { URL(string: $0) }
-    }
-
-    /// Sends the front tab to something that shows `goal`.
-    func redirect(showing goal: String) async -> Redirect {
-        if kind == .gecko {
-            await Self.geckoNavigate(pid: pid, to: "about:blank")
-            return .needsBlockScreen
-        }
-        // Safari refuses an Apple Events redirect to a file URL, so it gets a blank
-        // tab and the caller covers it with the native block screen.
-        guard kind != .safari, let page = Bundle.main.url(forResource: "block", withExtension: "html") else {
-            _ = await run("set URL of \(tab) to \"about:blank\"")
-            return .needsBlockScreen
-        }
-        // Percent-encoded, so the goal can't break out of the AppleScript string.
-        let fragment = goal.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
-        _ = await run("set URL of \(tab) to \"\(page.absoluteString)#\(fragment)\"")
-        return .blockPage
-    }
 
     private var pid: pid_t {
         NSRunningApplication.runningApplications(withBundleIdentifier: id).first?.processIdentifier ?? 0
     }
 
-    // Off the main thread: the browser can take its time, and the first-use Automation
-    // prompt holds the call until it is answered. The script is made and run in one go
-    // because an NSAppleScript must stay on the thread that created it.
-    // ponytail: compiles a script per call (about once a second, only while a browser
-    // is in front). Cache compiled scripts on one dedicated thread if that ever shows up.
-    @concurrent private func run(_ command: String) async -> String? {
-        var error: NSDictionary?
-        let result = NSAppleScript(source: """
-            with timeout of 1 second
-            tell application id "\(id)" to \(command)
-            end timeout
-            """)?
-            .executeAndReturnError(&error)
-        return error == nil ? result?.stringValue : nil
-    }
+    /// The URL of the front tab; `nil` when there is no window, no page, or no permission.
+    /// Chromium puts it on the window (`AXDocument`); otherwise it is the web area's `AXURL`,
+    /// else the address bar's text.
+    func frontURL() async -> URL? { await Self.read(pid: pid) }
 
-    // MARK: Gecko, through Accessibility. Untested: no Firefox-family browser was installed.
-
-    /// The page's address, from the web area (`AXURL`), else the address bar's text.
-    @concurrent private static func geckoURL(pid: pid_t) async -> URL? {
-        guard pid != 0, let window = geckoWindow(pid) else { return nil }
-        if let area = find(window, depth: 12, where: { role($0) == "AXWebArea" && attribute($0, "AXURL") != nil }),
+    // Off the main thread: a busy browser can take its time answering.
+    @concurrent private static func read(pid: pid_t) async -> URL? {
+        guard pid != 0, let window = window(pid) else { return nil }
+        if let document = attribute(window, kAXDocumentAttribute) as? String, let url = URL(string: document) { return url }
+        if let area = find(window, depth: 16, where: { role($0) == "AXWebArea" && attribute($0, "AXURL") != nil }),
            let url = attribute(area, "AXURL") as? URL { return url }
-        guard let bar = addressBar(in: window), let text = attribute(bar, kAXValueAttribute) as? String else { return nil }
-        // Firefox hides the scheme in the bar.
+        guard let bar = addressBar(in: window), let text = attribute(bar, kAXValueAttribute) as? String,
+              !text.isEmpty else { return nil }
+        // Browsers hide the scheme in the bar.
         return URL(string: text.contains("://") ? text : "https://" + text)
     }
 
-    /// Types `address` into the address bar and presses Return.
-    @concurrent private static func geckoNavigate(pid: pid_t, to address: String) async {
-        guard pid != 0, let window = geckoWindow(pid), let bar = addressBar(in: window) else { return }
-        AXUIElementSetAttributeValue(bar, kAXValueAttribute as CFString, address as CFString)
-        AXUIElementPerformAction(bar, kAXConfirmAction as CFString)
+    /// Sends the front tab to something that shows `goal`, by typing an address into the
+    /// address bar. Tried on 2026-11-16: Chrome takes the bundled block page; Safari takes
+    /// `about:blank` but not a file address, so the caller covers it with the block screen.
+    /// Gecko is untested (none was installed) and treated like Safari.
+    func redirect(showing goal: String) async -> Redirect {
+        var address = "about:blank"
+        if kind == .chromium, let page = Bundle.main.url(forResource: "block", withExtension: "html") {
+            address = page.absoluteString + "#" + (goal.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")
+        }
+        // Chromium's bar reports a confirm as done without navigating, so it gets a Return.
+        await Self.navigate(pid: pid, to: address, pressReturn: kind == .chromium)
+        return address == "about:blank" ? .needsBlockScreen : .blockPage
     }
 
-    nonisolated private static func geckoWindow(_ pid: pid_t) -> AXUIElement? {
+    @concurrent private static func navigate(pid: pid_t, to address: String, pressReturn: Bool) async {
+        guard pid != 0, let window = window(pid), let bar = addressBar(in: window) else { return }
+        AXUIElementSetAttributeValue(bar, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(bar, kAXValueAttribute as CFString, address as CFString)
+        if pressReturn {
+            for down in [true, false] { CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: down)?.postToPid(pid) }
+        } else {
+            AXUIElementPerformAction(bar, kAXConfirmAction as CFString)
+        }
+    }
+
+    // MARK: Accessibility
+
+    nonisolated private static func window(_ pid: pid_t) -> AXUIElement? {
         let app = AXUIElementCreateApplication(pid)
-        // Gecko builds its accessibility tree only for a client that asks.
+        // Chromium and Gecko build their accessibility tree only for a client that asks.
         AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
         AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
         return attribute(app, kAXFocusedWindowAttribute).map { $0 as! AXUIElement }
@@ -171,7 +122,7 @@ struct Browser: Identifiable, Hashable {
 
     // The address bar is the first text field in the window's toolbar, whatever the language.
     nonisolated private static func addressBar(in window: AXUIElement) -> AXUIElement? {
-        find(window, depth: 6) { role($0) == "AXTextField" && attribute($0, kAXValueAttribute) is String }
+        find(window, depth: 12) { role($0) == "AXTextField" && attribute($0, kAXValueAttribute) is String }
     }
 
     nonisolated private static func role(_ element: AXUIElement) -> String? { attribute(element, kAXRoleAttribute) as? String }

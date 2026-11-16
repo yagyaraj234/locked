@@ -30,17 +30,34 @@ private struct BlockView: View {
     let dismiss: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "lock.fill").font(.system(size: 48)).foregroundStyle(.secondary)
-            Text(goal.isEmpty ? "Back to work" : goal)
-                .font(.system(size: 44, weight: .bold))
-                .multilineTextAlignment(.center)
-            Button("Back to work", action: dismiss)
-                .controlSize(.extraLarge)
-                .keyboardShortcut(.defaultAction)
+        ZStack {
+            // The same look as setup and the in-tab block page.
+            Color(red: 0.05, green: 0.06, blue: 0.08)
+            RadialGradient(colors: [Color.accentColor.opacity(0.38), .clear], center: .top, startRadius: 0, endRadius: 520)
+            VStack(spacing: 0) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
+                Text("LOCKED")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(1)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 28)
+                Text(goal.isEmpty ? "Back to work" : goal)
+                    .font(.system(size: 64, weight: .bold))
+                    .tracking(-1.2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.5)
+                    .padding(.top, 14)
+                Button("Back to work", action: dismiss)
+                    .buttonStyle(PillStyle())
+                    .keyboardShortcut(.defaultAction)
+                    .padding(.top, 40)
+            }
+            .padding(80)
         }
-        .padding(80)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
+        .ignoresSafeArea()
+        .environment(\.colorScheme, .dark)
     }
 }

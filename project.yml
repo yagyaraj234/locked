@@ -24,7 +24,6 @@ targets:
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         INFOPLIST_KEY_LSUIElement: YES
-        INFOPLIST_KEY_NSAppleEventsUsageDescription: Locked reads the address of the front browser tab to redirect sites you have blocked.
     scheme:
       testTargets: [LockedTests]
   # Tests compile the pure policy file directly, so they never launch the app.

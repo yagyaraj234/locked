@@ -13,9 +13,9 @@ struct OnboardingView: View {
     @State private var newSite = ""
     @State private var when = When.work
     @FocusState private var goalFocused: Bool
-    /// Supported browsers installed here, each needing a permission before sites can be blocked.
+    /// Supported browsers installed here; one Accessibility permission covers them all.
     @State private var browsers = Browser.installed
-    @State private var granted: Set<String> = []
+    @State private var granted = Browser.permissionGranted
 
     private static let lastStep = 5
     private static let intro = ["Some apps are easy to open and hard to leave.", "Locked keeps them shut while you work."]
@@ -42,8 +42,8 @@ struct OnboardingView: View {
         switch step {
         case 1: !goal.trimmingCharacters(in: .whitespaces).isEmpty
         case 2: !list.apps.isEmpty || !list.sites.isEmpty
-        // No session is created until Locked can actually see every browser.
-        case 4: browsers.allSatisfy { granted.contains($0.id) }
+        // No session is created until Locked can actually see the browsers.
+        case 4: browsers.isEmpty || granted
         default: true
         }
     }
@@ -182,14 +182,34 @@ struct OnboardingView: View {
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(addSite)
             }
-            Text(([blockedSummary] + extra.apps.map(appName) + extra.sites.map(\.text)).joined(separator: " · "))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .contentTransition(.numericText())
-                .animation(.easeOut(duration: 0.2), value: blockedSummary)
+            VStack(spacing: 10) {
+                Text(blockedSummary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                blockedChips
+            }
+            .animation(.easeOut(duration: 0.2), value: list)
         }
+    }
+
+    /// Exactly what the answers block: each app by icon and name, each site by address.
+    private var blockedChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(list.apps, id: \.self) { app in
+                    HStack(spacing: 5) {
+                        Image(nsImage: icon(of: app)).resizable().frame(width: 18, height: 18)
+                        Text(appName(app))
+                    }
+                    .modifier(Chip())
+                }
+                ForEach(list.sites, id: \.self) { site in
+                    Text(site.text).modifier(Chip())
+                }
+            }
+        }
+        .frame(height: 28)
     }
 
     private var whenStep: some View {
@@ -221,47 +241,40 @@ struct OnboardingView: View {
         VStack(spacing: 22) {
             question("Let Locked see your browsers.", browsers.isEmpty
                      ? "No supported browser found, so there is nothing to allow."
-                     : "Locked reads the address of the front tab to block sites. Allow each one to continue.")
-            VStack(spacing: 10) {
-                ForEach(browsers) { browser in
-                    let isOn = granted.contains(browser.id)
-                    HStack(spacing: 14) {
-                        Image(nsImage: icon(of: browser)).resizable().frame(width: 28, height: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(browser.name).font(.headline)
-                            Text(browser.kind == .gecko ? "Accessibility" : "Automation").font(.callout).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if isOn {
-                            Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        } else {
-                            Button("Allow") {
-                                Task {
-                                    await browser.requestPermission()
-                                    // A denied or Accessibility prompt ends in System Settings.
-                                    if !browser.permissionGranted { NSWorkspace.shared.open(browser.permissionPane) }
-                                }
-                            }
-                        }
+                     : "Locked reads the address of the front tab to block sites. One permission covers every browser.")
+            if !browsers.isEmpty {
+                HStack(spacing: 14) {
+                    HStack(spacing: -8) {
+                        ForEach(browsers.prefix(4)) { Image(nsImage: icon(of: $0.id)).resizable().frame(width: 28, height: 28) }
                     }
-                    .padding(.horizontal, 16)
-                    .frame(height: 56)
-                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Accessibility").font(.headline)
+                        Text(browsers.map(\.name).joined(separator: ", ")).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    if granted {
+                        Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    } else {
+                        Button("Allow") { Browser.requestPermission() }
+                    }
                 }
+                .padding(.horizontal, 16)
+                .frame(height: 56)
+                .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(width: 420)
             }
-            .frame(width: 420)
         }
-        // Granting happens elsewhere (a system prompt, System Settings), so look again each second.
+        // Granting happens in System Settings, so look again each second.
         .task {
             while !Task.isCancelled {
-                granted = Set(browsers.filter(\.permissionGranted).map(\.id))
+                granted = Browser.permissionGranted
                 try? await Task.sleep(for: .seconds(1))
             }
         }
     }
 
-    private func icon(of browser: Browser) -> NSImage {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.id)
+    private func icon(of bundleID: String) -> NSImage {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
             .map { NSWorkspace.shared.icon(forFile: $0.path) } ?? NSImage()
     }
 
@@ -403,7 +416,18 @@ private struct CardStyle: ButtonStyle {
     }
 }
 
-private struct PillStyle: ButtonStyle {
+private struct Chip: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.callout)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(height: 26)
+            .background(.white.opacity(0.09), in: Capsule())
+    }
+}
+
+struct PillStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {

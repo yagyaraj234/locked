@@ -87,14 +87,14 @@ struct PanelView: View {
                 .labelsHidden()
             }
 
-            ForEach(model.deniedBrowsers) { browser in
+            if model.cantReadBrowsers {
                 HStack {
-                    Label("Can't read \(browser.name): site blocking is off there", systemImage: "exclamationmark.triangle.fill")
+                    Label("Can't read your browsers: site blocking is off", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                     Spacer()
                     Button("Allow…") {
-                        if browser.kind == .gecko { Task { await browser.requestPermission() } }
-                        NSWorkspace.shared.open(browser.permissionPane)
+                        Browser.requestPermission()
+                        NSWorkspace.shared.open(Browser.permissionPane)
                     }
                 }
             }

@@ -7,8 +7,8 @@ import SwiftUI
 @Observable final class AppModel {
     private(set) var policy = Policy()
     private(set) var active: [ActiveSession] = []
-    /// Running browsers whose Automation permission has been denied.
-    private(set) var deniedBrowsers: [Browser] = []
+    /// A session blocks sites, but Locked has no Accessibility permission to read browsers.
+    private(set) var cantReadBrowsers = false
 
     @ObservationIgnored private let blockScreen = BlockScreen()
     @ObservationIgnored private var onboardingWindow: NSWindow?
@@ -128,15 +128,14 @@ import SwiftUI
         // Browser permission only matters once some session blocks a site.
         let sitesEverySession = !policy.everySession.sites.isEmpty
         let usesSites = sitesEverySession || policy.sessions.contains { !$0.sites.isEmpty }
-        let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
-        let denied = usesSites ? running.compactMap(Browser.of).filter(\.permissionDenied).sorted { $0.name < $1.name } : []
-        if denied != deniedBrowsers { deniedBrowsers = denied }
+        let denied = usesSites && !Browser.permissionGranted
+        if denied != cantReadBrowsers { cantReadBrowsers = denied }
 
         guard let front = NSWorkspace.shared.frontmostApplication, let bundleID = front.bundleIdentifier else { return }
         if case .blocked(_, let goal) = policy.verdict(for: .app(bundleID), at: now) {
             front.hide()  // never terminate: unsaved work stays safe
             blockScreen.show(goal: goal)
-        } else if let browser = Browser.of(bundleID), !denied.contains(browser),
+        } else if !denied, let browser = Browser.of(bundleID),
                   nowActive.contains(where: { sitesEverySession || !$0.session.sites.isEmpty }), !readingBrowser {
             readingBrowser = true
             Task {
