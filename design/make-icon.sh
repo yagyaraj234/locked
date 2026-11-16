@@ -2,7 +2,7 @@
 # Renders design/icon.svg into the app icon set. Needs Google Chrome (the only SVG rasteriser here that draws filters).
 set -eu
 cd "$(dirname "$0")/.."
-out=Locked/Assets.xcassets/AppIcon.appiconset
+out=apps/macos/Locked/Assets.xcassets/AppIcon.appiconset
 mkdir -p "$out"
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
   --default-background-color=00000000 --window-size=1024,1024 \
@@ -24,4 +24,4 @@ cat > "$out/Contents.json" <<'EOF'
 {"idiom":"mac","size":"512x512","scale":"2x","filename":"icon_1024.png"}
 ],"info":{"author":"xcode","version":1}}
 EOF
-printf '{"info":{"author":"xcode","version":1}}\n' > Locked/Assets.xcassets/Contents.json
+printf '{"info":{"author":"xcode","version":1}}\n' > apps/macos/Locked/Assets.xcassets/Contents.json
