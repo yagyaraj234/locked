@@ -91,7 +91,8 @@ struct Browser: Identifiable, Hashable {
     /// Gecko is untested (none was installed) and treated like Safari.
     func redirect(showing goal: String) async -> Redirect {
         var address = "about:blank"
-        if kind == .chromium, let page = Bundle.main.url(forResource: "block", withExtension: "html") {
+        if kind == .chromium, let bundled = Bundle.main.url(forResource: "block", withExtension: "html") {
+            let page = Backdrop.page(bundled: bundled)
             address = page.absoluteString + "#" + (goal.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")
         }
         // Chromium's bar reports a confirm as done without navigating, so it gets a Return.

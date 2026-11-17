@@ -83,6 +83,9 @@ import SwiftUI
         changed()
     }
 
+    /// Shows the block screen as it will look, from Settings.
+    func previewBlockScreen() { blockScreen.show(goal: sessions.first?.goal ?? "") }
+
     // MARK: Onboarding
 
     func showOnboarding() {

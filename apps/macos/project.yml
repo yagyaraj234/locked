@@ -27,13 +27,14 @@ targets:
         INFOPLIST_KEY_LSUIElement: YES
     scheme:
       testTargets: [LockedTests]
-  # Tests compile the pure policy file directly, so they never launch the app.
+  # Tests compile the pure files directly, so they never launch the app.
   LockedTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - LockedTests
       - Locked/Policy.swift
+      - Locked/Backdrop.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yagyaraj.locked.tests
