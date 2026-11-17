@@ -63,6 +63,10 @@ private struct SessionEditor: View {
     let locked: Bool
     @Environment(AppModel.self) private var model
     @State private var draft: Session
+    @State private var confirmingDelete = false
+
+    /// A weekly schedule with no day never runs, so it can't be saved.
+    private var canSave: Bool { draft.schedule?.weekdays.isEmpty != true }
 
     init(session: Session, locked: Bool) {
         self.session = session
@@ -83,16 +87,23 @@ private struct SessionEditor: View {
                 BlockListSections(apps: $draft.apps, sites: $draft.sites)
                 ScheduleSection(schedule: $draft.schedule)
                 HStack {
-                    Button("Delete Session", role: .destructive) { model.delete(session.id) }
+                    Button("Delete Session", role: .destructive) { confirmingDelete = true }
                     Spacer()
                     Button("Save") { model.save(draft) }
                         .keyboardShortcut(.defaultAction)
-                        .disabled(draft == session)
+                        .disabled(draft == session || !canSave)
                 }
             }
             .disabled(locked)
         }
         .formStyle(.grouped)
+        .confirmationDialog("Delete “\(session.name)”?", isPresented: $confirmingDelete) {
+            Button("Delete Session", role: .destructive) { model.delete(session.id) }
+        }
+        // Leaving for another row keeps the edits rather than dropping them. A deleted session stays deleted.
+        .onDisappear {
+            if !locked, canSave, draft != session, model.sessions.contains(where: { $0.id == session.id }) { model.save(draft) }
+        }
     }
 }
 
@@ -237,6 +248,9 @@ struct ScheduleSection: View {
                 }
                 DatePicker("Starts", selection: time(schedule.start), displayedComponents: .hourAndMinute)
                 DatePicker("Ends", selection: time(schedule.end), displayedComponents: .hourAndMinute)
+                if schedule.wrappedValue.weekdays.isEmpty {
+                    Text("Pick at least one day, or it never runs.").font(.caption).foregroundStyle(.secondary)
+                }
                 if schedule.wrappedValue.end <= schedule.wrappedValue.start {
                     Text("Ends the next morning.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -267,15 +281,17 @@ func time(_ minutes: Binding<Int>) -> Binding<Date> {
 }
 
 private struct LaunchAtLoginToggle: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.controlActiveState) private var activeState
-    @State private var enabled = SMAppService.mainApp.status == .enabled
+    @State private var enabled = loginAgent.status == .enabled
 
     var body: some View {
         Toggle("Launch at login", isOn: Binding { enabled } set: { on in
-            try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
-            enabled = SMAppService.mainApp.status == .enabled
+            try? on ? loginAgent.register() : loginAgent.unregister()
+            enabled = loginAgent.status == .enabled
         })
+        .disabled(!model.active.isEmpty)  // or a restart would end the session
         // Re-read on focus: it may have been changed in System Settings.
-        .onChange(of: activeState) { enabled = SMAppService.mainApp.status == .enabled }
+        .onChange(of: activeState) { enabled = loginAgent.status == .enabled }
     }
 }

@@ -13,7 +13,14 @@ targets:
   Locked:
     type: application
     platform: macOS
-    sources: [Locked]
+    sources:
+      - Locked
+      # Starts Locked at login and restarts it if it is killed.
+      - path: LaunchAgent/com.yagyaraj.locked.keepalive.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yagyaraj.locked

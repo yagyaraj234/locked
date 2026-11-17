@@ -15,9 +15,24 @@ final class BlockScreen {
         return window
     }()
 
+    /// The backdrop is read again only when its file has changed.
+    private var cached: (stamp: Date?, image: NSImage?)?
+
+    private func backdrop() -> NSImage? {
+        let url = Backdrop.image()
+        let stamp = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        if let cached, cached.stamp == stamp { return cached.image }
+        let image = NSImage(contentsOf: url).flatMap { $0.isValid ? $0 : nil }
+        cached = (stamp, image)
+        return image
+    }
+
     func show(goal: String) {
-        let photo = NSImage(contentsOf: Backdrop.image()).flatMap { $0.isValid ? $0 : nil }
-        window.contentView = NSHostingView(rootView: BlockView(goal: goal, photo: photo) { [window] in window.orderOut(nil) })
+        let photo = backdrop()
+        window.contentView = NSHostingView(rootView: BlockView(goal: goal, photo: photo) { [window] in
+            window.orderOut(nil)
+            NSApp.hide(nil)  // hands focus back to the app underneath instead of leaving Locked active
+        })
         // The display the pointer is on, which is where the blocked app was being used.
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         window.setFrame(screen?.frame ?? .zero, display: true)
