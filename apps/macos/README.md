@@ -19,7 +19,7 @@ The build is ad-hoc signed, so macOS re-asks for Accessibility access after each
 - All blocking decisions live in `Locked/Policy.swift`, which is pure and is the only code under test. Everything else is verified by running the app.
 - Apps are hidden, never quit, and covered by a full-screen block screen.
 - Sites are caught by reading the front tab's address about once a second. Safari, Chromium browsers (Chrome, Arc, Brave, Edge, Helium, Vivaldi…) and Firefox-family browsers (Firefox, Zen, LibreWolf, Floorp…) are recognised from their app bundle and all read through Accessibility, so Locked needs that one permission and nothing per browser. The Firefox path is untested: none was installed.
-- Setup asks for that Accessibility permission and won't finish, so no session is created, until it is allowed.
+- Setup asks for that Accessibility permission, and won't finish until it is allowed if the list has sites. With no sites it isn't needed.
 - On first launch a short setup asks for a goal, what to block and when, and creates the first session from the answers. It can be run again from Settings (Setup Guide…). What you pick there goes into the Every Session list, which is blocked whenever any session is active.
 
 ### Block page

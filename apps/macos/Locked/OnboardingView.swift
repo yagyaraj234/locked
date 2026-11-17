@@ -43,7 +43,7 @@ struct OnboardingView: View {
         case 1: !goal.trimmingCharacters(in: .whitespaces).isEmpty
         case 2: !list.apps.isEmpty || !list.sites.isEmpty
         // No session is created until Locked can actually see the browsers.
-        case 4: browsers.isEmpty || granted
+        case 4: list.sites.isEmpty || browsers.isEmpty || granted
         default: true
         }
     }
@@ -254,10 +254,12 @@ struct OnboardingView: View {
                     Spacer()
                     if granted {
                         Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
                     } else {
                         Button("Allow") { Browser.requestPermission() }
                     }
                 }
+                .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.4, bounce: 0.2), value: granted)
                 .padding(.horizontal, 16)
                 .frame(height: 56)
                 .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -437,6 +439,7 @@ struct PillStyle: ButtonStyle {
             .padding(.horizontal, 22)
             .frame(height: 38)
             .background(.white.opacity(isEnabled ? 1 : 0.3), in: Capsule())
+            .animation(.easeOut(duration: 0.15), value: isEnabled)
             .contentShape(Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)

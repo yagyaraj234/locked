@@ -138,12 +138,15 @@ struct EndEarlyView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.controlActiveState) private var activeState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var remaining = 60
 
     var body: some View {
         VStack(spacing: 12) {
             Text("Ending “\(model.sessions.first { $0.id == sessionID }?.name ?? "")”").font(.headline)
             Text("\(remaining)").font(.system(size: 64, weight: .bold)).monospacedDigit()
+                .contentTransition(.numericText(countsDown: true))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: remaining)
             Text("Keep this window in front. Leaving it restarts the countdown.")
                 .foregroundStyle(.secondary)
             Button("Keep going", role: .cancel) { dismiss() }

@@ -31,18 +31,26 @@ nonisolated struct SiteRule: Codable, Hashable, Sendable {
     var text: String { domain + pathPrefix }
 
     /// Reads what a person types: "youtube.com", "youtube.com/shorts", or a pasted address.
+    /// Nil unless it is a plausible domain: dotted, no spaces, letters, digits and hyphens.
     init?(parsing input: String) {
-        var rest = Substring(input.trimmingCharacters(in: .whitespacesAndNewlines))
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.contains(where: \.isWhitespace) else { return nil }
+        var rest = Substring(trimmed)
         if let scheme = rest.range(of: "://") { rest = rest[scheme.upperBound...] }
         rest = rest.prefix { $0 != "?" && $0 != "#" }
         let slash = rest.firstIndex(of: "/") ?? rest.endIndex
         let host = Self.normalized(host: rest[..<slash].prefix { $0 != ":" })
-        guard !host.isEmpty else { return nil }
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2, labels.allSatisfy({ !$0.isEmpty }),
+              host.allSatisfy({ $0 == "." || $0 == "-" || ($0.isASCII && ($0.isLetter || $0.isNumber)) })
+        else { return nil }
         domain = host
         // "youtube.com/shorts/" is the same rule as "youtube.com/shorts".
-        var path = rest[slash...]
+        var path = String(rest[slash...])
         while path.hasSuffix("/") { path.removeLast() }
-        pathPrefix = String(path)
+        // Browsers report paths percent-encoded, which is how `URL.path()` gives them.
+        if !path.contains("%") { path = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path }
+        pathPrefix = path
     }
 
     func matches(_ url: URL) -> Bool {
@@ -57,7 +65,49 @@ nonisolated struct SiteRule: Codable, Hashable, Sendable {
         // "youtube.com." is the same site as "youtube.com", and browsers load it.
         var host = host.lowercased()
         if host.hasSuffix(".") { host.removeLast() }
-        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        if host.hasPrefix("www.") { host = String(host.dropFirst(4)) }
+        // Browsers report non-ASCII domains as punycode.
+        return host.split(separator: ".", omittingEmptySubsequences: false).map { punycode(String($0)) }.joined(separator: ".")
+    }
+
+    /// RFC 3492, for one label.
+    private static func punycode(_ label: String) -> String {
+        let code = label.unicodeScalars.map { Int($0.value) }
+        guard code.contains(where: { $0 >= 128 }) else { return label }
+        var out = String(String.UnicodeScalarView(label.unicodeScalars.filter { $0.value < 128 }))
+        let basic = out.count
+        var handled = basic
+        if basic > 0 { out += "-" }
+        var n = 128, delta = 0, bias = 72
+        func digit(_ d: Int) -> Character { Character(UnicodeScalar(UInt8(d < 26 ? 97 + d : 22 + d))) }
+        while handled < code.count {
+            let next = code.filter { $0 >= n }.min()!
+            delta += (next - n) * (handled + 1)
+            n = next
+            for c in code {
+                if c < n { delta += 1 }
+                guard c == n else { continue }
+                var q = delta, k = 36
+                while true {
+                    let t = k <= bias ? 1 : k >= bias + 26 ? 26 : k - bias
+                    if q < t { break }
+                    out.append(digit(t + (q - t) % (36 - t)))
+                    q = (q - t) / (36 - t)
+                    k += 36
+                }
+                out.append(digit(q))
+                var d = handled == basic ? delta / 700 : delta / 2
+                d += d / (handled + 1)
+                var m = 0
+                while d > 455 { d /= 35; m += 36 }
+                bias = m + 36 * d / (d + 38)
+                delta = 0
+                handled += 1
+            }
+            delta += 1
+            n += 1
+        }
+        return "xn--" + out
     }
 }
 
@@ -94,7 +144,7 @@ nonisolated struct ManualRun: Codable, Equatable, Sendable {
 }
 
 /// A scheduled session ended early: its schedule is ignored until `until`,
-/// the end of the window it was ended in.
+/// a short break, or the end of the window if that comes first.
 nonisolated struct Suppression: Codable, Equatable, Sendable {
     var sessionID: UUID
     var until: Date
@@ -154,26 +204,66 @@ nonisolated struct Policy: Codable, Equatable, Sendable {
         runs.append(ManualRun(sessionID: sessionID, end: max(end, latest ?? end)))
     }
 
+    /// How long a scheduled session stays off after being ended early.
+    static let breakLength: TimeInterval = 15 * 60
+
     /// Ends a session now: drops its manual run and, if it is inside a scheduled
-    /// window, keeps the schedule off until that window ends.
+    /// window, keeps the schedule off for a break (or until the window ends, if sooner).
     mutating func endEarly(_ sessionID: UUID, at now: Date, calendar: Calendar = .current) {
         runs.removeAll { $0.sessionID == sessionID }
         suppressions.removeAll { $0.sessionID == sessionID }
         let schedule = sessions.first { $0.id == sessionID }?.schedule
         if let window = schedule?.window(containing: now, calendar: calendar) {
-            suppressions.append(Suppression(sessionID: sessionID, until: window.end))
+            suppressions.append(Suppression(sessionID: sessionID, until: min(window.end, now.addingTimeInterval(Self.breakLength))))
         }
     }
 }
 
 nonisolated extension Policy {
-    /// Written out so data saved before `everySession` existed still loads.
+    /// Written out so data saved before a field existed still loads: every field is optional on read.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        sessions = try container.decode([Session].self, forKey: .sessions)
-        runs = try container.decode([ManualRun].self, forKey: .runs)
-        suppressions = try container.decode([Suppression].self, forKey: .suppressions)
+        sessions = try container.decodeIfPresent([Session].self, forKey: .sessions) ?? []
+        runs = try container.decodeIfPresent([ManualRun].self, forKey: .runs) ?? []
+        suppressions = try container.decodeIfPresent([Suppression].self, forKey: .suppressions) ?? []
         everySession = try container.decodeIfPresent(BlockList.self, forKey: .everySession) ?? BlockList()
+    }
+}
+
+nonisolated extension Session {
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        goal = try c.decodeIfPresent(String.self, forKey: .goal) ?? ""
+        apps = try c.decodeIfPresent([String].self, forKey: .apps) ?? []
+        sites = try c.decodeIfPresent([SiteRule].self, forKey: .sites) ?? []
+        schedule = try c.decodeIfPresent(Schedule.self, forKey: .schedule)
+    }
+}
+
+nonisolated extension BlockList {
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        apps = try c.decodeIfPresent([String].self, forKey: .apps) ?? []
+        sites = try c.decodeIfPresent([SiteRule].self, forKey: .sites) ?? []
+    }
+}
+
+nonisolated extension Schedule {
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        weekdays = try c.decodeIfPresent(Set<Int>.self, forKey: .weekdays) ?? []
+        start = try c.decodeIfPresent(Int.self, forKey: .start) ?? 9 * 60
+        end = try c.decodeIfPresent(Int.self, forKey: .end) ?? 17 * 60
+    }
+}
+
+nonisolated extension SiteRule {
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        domain = try c.decode(String.self, forKey: .domain)
+        pathPrefix = try c.decodeIfPresent(String.self, forKey: .pathPrefix) ?? ""
     }
 }
 

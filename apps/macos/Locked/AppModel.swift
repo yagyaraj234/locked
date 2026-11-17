@@ -3,6 +3,9 @@ import Observation
 import ServiceManagement
 import SwiftUI
 
+/// Login item that relaunches Locked if it is killed (the plist is copied into the app bundle).
+let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.plist")
+
 /// Owns the saved policy, reads the clock, and enforces the policy's verdicts.
 @Observable final class AppModel {
     private(set) var policy = Policy()
@@ -15,17 +18,32 @@ import SwiftUI
     @ObservationIgnored private let defaults = UserDefaults.standard
     /// One browser read at a time: a slow or prompting browser must not queue up a read per tick.
     @ObservationIgnored private var readingBrowser = false
+    @ObservationIgnored private var readingBackground = false
 
     var sessions: [Session] { policy.sessions }
 
     init() {
-        if let data = defaults.data(forKey: "policy"), let saved = try? JSONDecoder().decode(Policy.self, from: data) {
-            policy = saved
+        let decoder = JSONDecoder()
+        if let data = defaults.data(forKey: "policy") {
+            if let saved = try? decoder.decode(Policy.self, from: data) {
+                policy = saved
+            } else {
+                // Unreadable (say, saved by a newer version): kept aside, because the next save overwrites it.
+                defaults.set(data, forKey: "policy.unreadable")
+            }
         }
-        if !defaults.bool(forKey: "didRegisterLoginItem") {
+        // Something kept aside by an earlier launch comes back once this version can read it.
+        if policy.sessions.isEmpty, let kept = defaults.data(forKey: "policy.unreadable"),
+           let saved = try? decoder.decode(Policy.self, from: kept) {
+            policy = saved
+            defaults.removeObject(forKey: "policy.unreadable")
+            if let data = try? JSONEncoder().encode(saved) { defaults.set(data, forKey: "policy") }
+        }
+        if !defaults.bool(forKey: "didRegisterLoginAgent") {
             // Once only, so turning the toggle off in Settings sticks. A failure
             // (say, running from outside /Applications) is tried again next launch.
-            if (try? SMAppService.mainApp.register()) != nil { defaults.set(true, forKey: "didRegisterLoginItem") }
+            try? SMAppService.mainApp.unregister()  // the plain login item of 0.1; the agent replaces it
+            if (try? loginAgent.register()) != nil { defaults.set(true, forKey: "didRegisterLoginAgent") }
         }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
@@ -96,6 +114,12 @@ import SwiftUI
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
+        if onboardingWindow == nil {
+            // Closing the window by its button counts as finishing, or it would return every launch.
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [defaults] _ in
+                defaults.set(true, forKey: "didOnboard")
+            }
+        }
         window.contentViewController = NSHostingController(rootView: OnboardingView().environment(self))
         window.layoutIfNeeded()  // size to the content first, or center() centres an empty window
         window.center()
@@ -110,7 +134,13 @@ import SwiftUI
         defaults.set(true, forKey: "didOnboard")
         onboardingWindow?.close()
         guard let session, active.isEmpty else { return }
-        policy.sessions.append(session)
+        // Setup run again updates the session it made last time instead of adding a twin.
+        if let index = policy.sessions.firstIndex(where: { $0.name == session.name }) {
+            policy.sessions[index].goal = session.goal
+            policy.sessions[index].schedule = session.schedule
+        } else {
+            policy.sessions.append(session)
+        }
         policy.everySession.apps += list.apps.filter { !policy.everySession.apps.contains($0) }
         policy.everySession.sites += list.sites.filter { !policy.everySession.sites.contains($0) }
         changed()
@@ -134,18 +164,63 @@ import SwiftUI
         let denied = usesSites && !Browser.permissionGranted
         if denied != cantReadBrowsers { cantReadBrowsers = denied }
 
+        // Every blocked app that is showing, not only the front one: a window behind another still scrolls and plays.
+        if !nowActive.isEmpty {
+            for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && !app.isHidden {
+                if let id = app.bundleIdentifier, case .blocked = policy.verdict(for: .app(id), at: now) { app.hide() }
+            }
+        }
+
+        // A blocked site in a browser window that is not in front is still scrollable and playing.
+        if !denied, !readingBackground, nowActive.contains(where: { sitesEverySession || !$0.session.sites.isEmpty }) {
+            let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            let others = NSWorkspace.shared.runningApplications.compactMap { app -> (NSRunningApplication, Browser)? in
+                guard app.activationPolicy == .regular, !app.isHidden, app.processIdentifier != frontPID,
+                      let id = app.bundleIdentifier, let browser = Browser.of(id) else { return nil }
+                return (app, browser)
+            }
+            if !others.isEmpty {
+                readingBackground = true
+                Task {
+                    defer { readingBackground = false }
+                    for (app, browser) in others {
+                        let urls = await browser.allURLs(pid: app.processIdentifier)
+                        if urls.contains(where: { if case .blocked = policy.verdict(for: .url($0), at: Date()) { true } else { false } }) {
+                            app.hide()
+                        }
+                    }
+                }
+            }
+        }
+
         guard let front = NSWorkspace.shared.frontmostApplication, let bundleID = front.bundleIdentifier else { return }
         if case .blocked(_, let goal) = policy.verdict(for: .app(bundleID), at: now) {
             front.hide()  // never terminate: unsaved work stays safe
             blockScreen.show(goal: goal)
-        } else if !denied, let browser = Browser.of(bundleID),
-                  nowActive.contains(where: { sitesEverySession || !$0.session.sites.isEmpty }), !readingBrowser {
-            readingBrowser = true
-            Task {
-                defer { readingBrowser = false }
-                guard let url = await browser.frontURL(),
-                      case .blocked(_, let goal) = policy.verdict(for: .url(url), at: Date()) else { return }
-                if await browser.redirect(showing: goal) == .needsBlockScreen { blockScreen.show(goal: goal) }
+        } else if let browser = Browser.of(bundleID),
+                  nowActive.contains(where: { sitesEverySession || !$0.session.sites.isEmpty }) {
+            if denied {
+                // Fails closed: otherwise switching Accessibility off would switch site blocking off.
+                front.hide()
+                blockScreen.show(goal: "Allow Accessibility for Locked to use your browser")
+            } else if !readingBrowser {
+                let pid = front.processIdentifier
+                readingBrowser = true
+                Task {
+                    defer { readingBrowser = false }
+                    guard let url = await browser.frontURL(pid: pid),
+                          case .blocked(_, let goal) = policy.verdict(for: .url(url), at: Date()) else { return }
+                    var covered = await browser.redirect(pid: pid, showing: goal) == .blockPage
+                    if covered {
+                        // Trust nothing: the tab must really have left the blocked address.
+                        try? await Task.sleep(for: .milliseconds(500))
+                        if let after = await browser.frontURL(pid: pid),
+                           case .blocked = policy.verdict(for: .url(after), at: Date()) { covered = false }
+                    }
+                    if !covered, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid {
+                        blockScreen.show(goal: goal)
+                    }
+                }
             }
         }
     }

@@ -23,7 +23,7 @@ export const FAQ = [
   },
   {
     q: "Is Locked open source?",
-    a: "No. Locked is free to download today, but it is not open source.",
+    a: "No. The source code is public on GitHub, so you can read it, but it has no open-source licence: you may not copy, modify or redistribute it.",
   },
   {
     q: "How do I install it?",

@@ -205,11 +205,13 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         #expect(policy.activeSessions(at: nov(9, 10), calendar: utc).isEmpty)
     }
 
-    @Test func `a scheduled session ended early stays off for the rest of its window only`() {
+    @Test func `a scheduled session ended early stays off for a short break only`() {
         var policy = Policy(sessions: [Overlap.office])
         policy.endEarly(Overlap.office.id, at: nov(9, 10), calendar: utc)
         #expect(policy.activeSessions(at: nov(9, 10), calendar: utc).isEmpty)
-        #expect(policy.activeSessions(at: nov(9, 16, 59), calendar: utc).isEmpty)
+        #expect(policy.activeSessions(at: nov(9, 10, 14), calendar: utc).isEmpty)
+        #expect(policy.activeSessions(at: nov(9, 10, 15), calendar: utc).map(\.session.name) == ["Office"])
+        #expect(policy.activeSessions(at: nov(9, 16, 59), calendar: utc).map(\.session.name) == ["Office"])
         #expect(policy.activeSessions(at: nov(10, 9), calendar: utc).map(\.session.name) == ["Office"])  // Tuesday
     }
 
@@ -232,7 +234,7 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         var policy = Policy(sessions: [Overlap.office])
         policy.endEarly(Overlap.office.id, at: nov(9, 10), calendar: utc)
         policy.start(Overlap.office.id, until: nov(9, 12))
-        #expect(policy.activeSessions(at: nov(9, 11), calendar: utc).first?.end == nov(9, 12))
+        #expect(policy.activeSessions(at: nov(9, 10, 5), calendar: utc).first?.end == nov(9, 12))
     }
 }
 
@@ -268,5 +270,26 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         let policy = try JSONDecoder().decode(Policy.self, from: Data(saved.utf8))
         #expect(policy.sessions.map(\.name) == ["Work"])
         #expect(policy.everySession == BlockList())
+    }
+}
+
+@Suite struct SiteRuleInput {
+    @Test func `things that are not domains are refused`() {
+        #expect(SiteRule(parsing: "hello world") == nil)
+        #expect(SiteRule(parsing: "com") == nil)
+        #expect(SiteRule(parsing: "a..com") == nil)
+    }
+
+    @Test func `a non-ASCII domain and a spaced path match what the browser reports`() {
+        #expect(SiteRule(parsing: "bücher.de")?.domain == "xn--bcher-kva.de")
+        #expect(SiteRule(parsing: "bücher.de")!.matches(URL(string: "https://xn--bcher-kva.de/x")!))
+        #expect(SiteRule(parsing: "example.com/café")!.matches(URL(string: "https://example.com/caf%C3%A9/a")!))
+    }
+
+    @Test func `saved data missing newer fields still loads`() throws {
+        let old = #"{"sessions":[{"name":"Work","sites":[{"domain":"a.com"}],"schedule":{"weekdays":[2]}}]}"#
+        let policy = try JSONDecoder().decode(Policy.self, from: Data(old.utf8))
+        #expect(policy.sessions.first?.sites.first?.pathPrefix == "")
+        #expect(policy.sessions.first?.schedule?.end == 17 * 60)
     }
 }
