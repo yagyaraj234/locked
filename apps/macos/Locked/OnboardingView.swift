@@ -4,7 +4,7 @@ import SwiftUI
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State var step = 0
+    @State private var step = Step.intro
     @State private var line = 0
     @State private var goal = ""
     @State private var picked: Set<String> = []
@@ -17,7 +17,8 @@ struct OnboardingView: View {
     @State private var browsers = Browser.installed
     @State private var granted = Browser.permissionGranted
 
-    private static let lastStep = 5
+    /// The screens, in the order they're shown.
+    private enum Step: Int { case intro, goal, distractions, hours, permission, summary }
     private static let intro = ["Some apps are easy to open and hard to leave.", "Locked keeps them shut while you work."]
 
     /// Everything the answers block: the picked kinds, then anything added by hand.
@@ -40,11 +41,13 @@ struct OnboardingView: View {
 
     private var canContinue: Bool {
         switch step {
-        case 1: !goal.trimmingCharacters(in: .whitespaces).isEmpty
-        case 2: !list.apps.isEmpty || !list.sites.isEmpty
+        case .goal: !goal.trimmingCharacters(in: .whitespaces).isEmpty
+        case .distractions: !list.apps.isEmpty || !list.sites.isEmpty
         // No session is created until Locked can actually see the browsers.
-        case 4: list.sites.isEmpty || browsers.isEmpty || granted
-        default: true
+        case .permission: list.sites.isEmpty || browsers.isEmpty || granted
+        // Finishing changes the sessions, which a running session locks.
+        case .summary: !model.locked
+        case .intro, .hours: true
         }
     }
 
@@ -57,7 +60,7 @@ struct OnboardingView: View {
 
             VStack(spacing: 0) {
                 // Open until the last screen, where it clicks shut.
-                Image(systemName: step == Self.lastStep ? "lock.fill" : "lock.open.fill")
+                Image(systemName: step == .summary ? "lock.fill" : "lock.open.fill")
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(.tint)
                     .contentTransition(.symbolEffect(.replace))
@@ -67,12 +70,12 @@ struct OnboardingView: View {
 
                 Group {
                     switch step {
-                    case 0: introStep
-                    case 1: goalStep
-                    case 2: distractionStep
-                    case 3: whenStep
-                    case 4: permissionStep
-                    default: summaryStep
+                    case .intro: introStep
+                    case .goal: goalStep
+                    case .distractions: distractionStep
+                    case .hours: whenStep
+                    case .permission: permissionStep
+                    case .summary: summaryStep
                     }
                 }
                 .id(step)
@@ -87,23 +90,23 @@ struct OnboardingView: View {
         }
         .frame(width: 760, height: 580)
         .contentShape(Rectangle())
-        .onTapGesture { if step == 0 { advance() } }
+        .onTapGesture { if step == .intro { advance() } }
         .environment(\.colorScheme, .dark)
     }
 
     private var footer: some View {
         ZStack {
-            if step == 0 {
+            if step == .intro {
                 Text("Click anywhere or press Return").font(.callout).foregroundStyle(.tertiary)
             }
             HStack {
-                Button(step == 0 ? "Skip Setup" : "Back") {
-                    if step == 0 { model.finishOnboarding(session: nil) } else { go(-1) }
+                Button(step == .intro ? "Skip Setup" : "Back") {
+                    if step == .intro { model.finishOnboarding(session: nil) } else { go(-1) }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 Spacer()
-                Button(step == Self.lastStep ? "Finish" : "Continue", action: advance)
+                Button(step == .summary ? "Finish" : "Continue", action: advance)
                     .buttonStyle(PillStyle())
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canContinue)
@@ -114,9 +117,9 @@ struct OnboardingView: View {
 
     private func advance() {
         guard canContinue else { return }
-        if step == 0, line < Self.intro.count - 1 {
+        if step == .intro, line < Self.intro.count - 1 {
             withAnimation(.easeOut(duration: 0.3)) { line += 1 }
-        } else if step < Self.lastStep {
+        } else if step != .summary {
             go(1)
         } else {
             model.finishOnboarding(session: Session(name: when.name, goal: goal, schedule: when.schedule), list: list)
@@ -125,7 +128,9 @@ struct OnboardingView: View {
 
     private func go(_ delta: Int) {
         // Critically damped: it was a click, not a throw, so nothing should overshoot.
-        withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.4, bounce: 0)) { step += delta }
+        withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.4, bounce: 0)) {
+            step = Step(rawValue: step.rawValue + delta) ?? step
+        }
     }
 
     // MARK: Steps
@@ -282,8 +287,9 @@ struct OnboardingView: View {
 
     private var summaryStep: some View {
         VStack(spacing: 24) {
-            question("You're set.", when.schedule == nil
-                     ? "Start it from the lock in your menu bar."
+            question(model.locked ? "Almost set." : "You're set.",
+                     model.locked ? "A session is running. Finish once it ends; your answers stay here."
+                     : when.schedule == nil ? "Start it from the lock in your menu bar."
                      : "Locked waits in your menu bar and locks on schedule.")
             VStack(spacing: 0) {
                 row("Your goal", goal)

@@ -19,6 +19,12 @@ nonisolated struct BlockList: Codable, Equatable, Sendable {
     /// Bundle identifiers.
     var apps: [String] = []
     var sites: [SiteRule] = []
+
+    /// Adds what `other` lists and this one doesn't.
+    mutating func add(_ other: BlockList) {
+        apps += other.apps.filter { !apps.contains($0) }
+        sites += other.sites.filter { !sites.contains($0) }
+    }
 }
 
 /// A domain, optionally narrowed to a path prefix. Build one with `init(parsing:)`,
@@ -185,6 +191,12 @@ nonisolated struct Policy: Codable, Equatable, Sendable {
             }
             return ends.max().map { ActiveSession(session: session, end: $0) }
         }
+    }
+
+    /// Sessions ended early that are on their break at `now`, each with when it comes back.
+    /// A break is still part of the session: it stays locked against edits.
+    func breaks(at now: Date) -> [Suppression] {
+        suppressions.filter { now < $0.until }
     }
 
     func verdict(for target: Target, at now: Date, calendar: Calendar = .current) -> Verdict {

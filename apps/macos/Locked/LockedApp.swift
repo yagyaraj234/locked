@@ -17,7 +17,7 @@ struct LockedApp: App {
         .commands {
             // Replaces the default Quit so Cmd-Q is gone too while a session is running.
             CommandGroup(replacing: .appTermination) {
-                if model.active.isEmpty {
+                if !model.locked {
                     Button("Quit Locked") { NSApp.terminate(nil) }.keyboardShortcut("q")
                 }
             }
@@ -46,8 +46,17 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if model.active.isEmpty {
+            if model.active.isEmpty && model.onBreak.isEmpty {
                 Text("No session active").foregroundStyle(.secondary)
+            }
+            // Ended early inside its hours: it comes back by itself.
+            ForEach(model.onBreak, id: \.sessionID) { pause in
+                HStack {
+                    Text(model.sessions.first { $0.id == pause.sessionID }?.name ?? "").bold()
+                    Spacer()
+                    Text("On a break, back in").foregroundStyle(.secondary)
+                    Text(timerInterval: Date.now...max(Date.now, pause.until)).monospacedDigit()
+                }
             }
             ForEach(model.active) { active in
                 VStack(alignment: .leading, spacing: 4) {
@@ -103,8 +112,8 @@ struct PanelView: View {
             HStack {
                 Button("Settings…") { open("settings", nil) }
                 Spacer()
-                // No way out through Quit while a session is running.
-                if model.active.isEmpty {
+                // No way out through Quit while a session is running or on a break.
+                if !model.locked {
                     Button("Quit Locked") { NSApp.terminate(nil) }
                 }
             }
@@ -168,5 +177,7 @@ struct EndEarlyView: View {
             if model.isActive(sessionID) { model.endEarly(sessionID) }  // it may have ended by itself meanwhile
             dismiss()
         }
+        // Ended by itself mid-count: nothing left to end.
+        .onChange(of: model.isActive(sessionID)) { _, isActive in if !isActive { dismiss() } }
     }
 }

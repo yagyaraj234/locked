@@ -20,7 +20,7 @@ struct SettingsView: View {
                 Section("Sessions") {
                     ForEach(model.sessions) { session in
                         Label(session.name.isEmpty ? "Untitled" : session.name,
-                              systemImage: model.isActive(session.id) ? "lock.fill" : "lock.open")
+                              systemImage: model.isLocked(session.id) ? "lock.fill" : "lock.open")
                             .tag(Selection.session(session.id))
                     }
                 }
@@ -35,7 +35,7 @@ struct SettingsView: View {
                     LaunchAtLoginToggle()
                     Button("Setup Guide…") { model.showOnboarding() }
                         .buttonStyle(.link)
-                        .disabled(!model.active.isEmpty)
+                        .disabled(model.locked)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
@@ -47,7 +47,7 @@ struct SettingsView: View {
             } else if selection == .blockScreen {
                 BlockScreenEditor()
             } else if let session = model.sessions.first(where: { selection == .session($0.id) }) {
-                SessionEditor(session: session, locked: model.isActive(session.id))
+                SessionEditor(session: session, locked: model.isLocked(session.id))
                     .id(session.id)
             } else {
                 Text("Select a session, or add one.").foregroundStyle(.secondary)
@@ -77,7 +77,7 @@ private struct SessionEditor: View {
     var body: some View {
         Form {
             if locked {
-                Label("This session is active. It can't be changed until it ends.", systemImage: "lock.fill")
+                Label("This session is running or on a break. It can't be changed until it ends.", systemImage: "lock.fill")
             }
             Group {
                 Section {
@@ -100,6 +100,8 @@ private struct SessionEditor: View {
         .confirmationDialog("Delete “\(session.name)”?", isPresented: $confirmingDelete) {
             Button("Delete Session", role: .destructive) { model.delete(session.id) }
         }
+        // Changed elsewhere (Setup Guide run again): start from that, or leaving would save the old draft over it.
+        .onChange(of: session) { draft = session }
         // Leaving for another row keeps the edits rather than dropping them. A deleted session stays deleted.
         .onDisappear {
             if !locked, canSave, draft != session, model.sessions.contains(where: { $0.id == session.id }) { model.save(draft) }
@@ -114,14 +116,14 @@ private struct EverySessionEditor: View {
     var body: some View {
         let list = Binding { model.policy.everySession } set: { model.setEverySession($0) }
         Form {
-            if model.active.isEmpty {
+            if !model.locked {
                 Text("Blocked whenever any session is active, on top of that session's own apps and sites.")
                     .foregroundStyle(.secondary)
             } else {
-                Label("A session is active. This list can't be changed until it ends.", systemImage: "lock.fill")
+                Label("A session is running or on a break. This list can't be changed until it ends.", systemImage: "lock.fill")
             }
             BlockListSections(apps: list.apps, sites: list.sites)
-                .disabled(!model.active.isEmpty)
+                .disabled(model.locked)
         }
         .formStyle(.grouped)
     }
@@ -290,7 +292,7 @@ private struct LaunchAtLoginToggle: View {
             try? on ? loginAgent.register() : loginAgent.unregister()
             enabled = loginAgent.status == .enabled
         })
-        .disabled(!model.active.isEmpty)  // or a restart would end the session
+        .disabled(model.locked)  // or a restart would end the session
         // Re-read on focus: it may have been changed in System Settings.
         .onChange(of: activeState) { enabled = loginAgent.status == .enabled }
     }
