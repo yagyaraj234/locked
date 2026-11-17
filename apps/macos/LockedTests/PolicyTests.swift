@@ -215,6 +215,19 @@ let work = Session(name: "Work", goal: "Ship the feature", apps: ["com.tinyspeck
         #expect(policy.activeSessions(at: nov(10, 9), calendar: utc).map(\.session.name) == ["Office"])  // Tuesday
     }
 
+    @Test func `a scheduled session ended early is on a break until it comes back`() {
+        var policy = Policy(sessions: [Overlap.office])
+        policy.endEarly(Overlap.office.id, at: nov(9, 10), calendar: utc)
+        #expect(policy.breaks(at: nov(9, 10, 14)) == [Suppression(sessionID: Overlap.office.id, until: nov(9, 10, 15))])
+        #expect(policy.breaks(at: nov(9, 10, 15)).isEmpty)
+    }
+
+    @Test func `a manual run ended early has no break`() {
+        var policy = Policy(sessions: [work], runs: [ManualRun(sessionID: work.id, end: nov(9, 11))])
+        policy.endEarly(work.id, at: nov(9, 10), calendar: utc)
+        #expect(policy.breaks(at: nov(9, 10)).isEmpty)
+    }
+
     @Test func `ending one session early leaves the other running`() {
         var policy = Policy(sessions: [Overlap.office, Overlap.sprint],
                             runs: [ManualRun(sessionID: Overlap.sprint.id, end: nov(9, 11))])

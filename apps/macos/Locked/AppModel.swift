@@ -10,6 +10,8 @@ let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.pl
 @Observable final class AppModel {
     private(set) var policy = Policy()
     private(set) var active: [ActiveSession] = []
+    /// Sessions ended early and coming back after a break; not also in `active`.
+    private(set) var onBreak: [Suppression] = []
     /// A session blocks sites, but Locked has no Accessibility permission to read browsers.
     private(set) var cantReadBrowsers = false
 
@@ -32,12 +34,17 @@ let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.pl
                 defaults.set(data, forKey: "policy.unreadable")
             }
         }
-        // Something kept aside by an earlier launch comes back once this version can read it.
-        if policy.sessions.isEmpty, let kept = defaults.data(forKey: "policy.unreadable"),
-           let saved = try? decoder.decode(Policy.self, from: kept) {
-            policy = saved
+        // Something kept aside by an earlier launch comes back once this version can read it,
+        // beside any sessions made since. Old runs and breaks are long over, so only the rules return.
+        if let kept = defaults.data(forKey: "policy.unreadable"), let saved = try? decoder.decode(Policy.self, from: kept) {
+            if policy.sessions.isEmpty {
+                policy = saved
+            } else {
+                policy.sessions += saved.sessions.filter { old in !policy.sessions.contains { $0.id == old.id } }
+                policy.everySession.add(saved.everySession)
+            }
             defaults.removeObject(forKey: "policy.unreadable")
-            if let data = try? JSONEncoder().encode(saved) { defaults.set(data, forKey: "policy") }
+            if let data = try? JSONEncoder().encode(policy) { defaults.set(data, forKey: "policy") }
         }
         if !defaults.bool(forKey: "didRegisterLoginAgent") {
             // Once only, so turning the toggle off in Settings sticks. A failure
@@ -64,10 +71,16 @@ let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.pl
 
     func isActive(_ id: UUID) -> Bool { active.contains { $0.id == id } }
 
-    // MARK: Changes. An active session is locked: it can't be edited or deleted.
+    /// Active or on a break. A break is not a way out: the session comes back after it.
+    func isLocked(_ id: UUID) -> Bool { isActive(id) || onBreak.contains { $0.sessionID == id } }
+
+    /// Some session is locked, so Quit, the every-session list and the login item are too.
+    var locked: Bool { !active.isEmpty || !onBreak.isEmpty }
+
+    // MARK: Changes. A locked session can't be edited or deleted.
 
     func save(_ session: Session) {
-        guard !isActive(session.id) else { return }
+        guard !isLocked(session.id) else { return }
         if let index = policy.sessions.firstIndex(where: { $0.id == session.id }) {
             policy.sessions[index] = session
         } else {
@@ -77,16 +90,16 @@ let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.pl
     }
 
     func delete(_ id: UUID) {
-        guard !isActive(id) else { return }
+        guard !isLocked(id) else { return }
         policy.sessions.removeAll { $0.id == id }
         policy.runs.removeAll { $0.sessionID == id }
         policy.suppressions.removeAll { $0.sessionID == id }
         changed()
     }
 
-    /// Locked while any session is active, since it applies to all of them.
+    /// Locked while any session is, since it applies to all of them.
     func setEverySession(_ list: BlockList) {
-        guard active.isEmpty else { return }
+        guard !locked else { return }
         policy.everySession = list
         changed()
     }
@@ -130,10 +143,12 @@ let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.pl
     }
 
     /// Ends onboarding. `session` is nil when it was skipped; `list` is added to the every-session list.
+    /// Setup can't finish while a session is locked (its Finish is disabled), so the answers are never dropped.
     func finishOnboarding(session: Session?, list: BlockList = BlockList()) {
+        if session != nil, locked { return }
         defaults.set(true, forKey: "didOnboard")
         onboardingWindow?.close()
-        guard let session, active.isEmpty else { return }
+        guard let session else { return }
         // Setup run again updates the session it made last time instead of adding a twin.
         if let index = policy.sessions.firstIndex(where: { $0.name == session.name }) {
             policy.sessions[index].goal = session.goal
@@ -141,8 +156,7 @@ let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.pl
         } else {
             policy.sessions.append(session)
         }
-        policy.everySession.apps += list.apps.filter { !policy.everySession.apps.contains($0) }
-        policy.everySession.sites += list.sites.filter { !policy.everySession.sites.contains($0) }
+        policy.everySession.add(list)
         changed()
     }
 
@@ -157,6 +171,8 @@ let loginAgent = SMAppService.agent(plistName: "com.yagyaraj.locked.keepalive.pl
         let now = Date()
         let nowActive = policy.activeSessions(at: now)
         if nowActive != active { active = nowActive }
+        let nowOnBreak = policy.breaks(at: now).filter { pause in !nowActive.contains { $0.id == pause.sessionID } }
+        if nowOnBreak != onBreak { onBreak = nowOnBreak }
 
         // Browser permission only matters once some session blocks a site.
         let sitesEverySession = !policy.everySession.sites.isEmpty
