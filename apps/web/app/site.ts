@@ -1,23 +1,37 @@
 // Set NEXT_PUBLIC_SITE_URL to the deployed origin; canonical, sitemap and OG URLs are built from it.
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 export const REPO = "https://github.com/yagyaraj234/locked";
+// Always the newest release; the asset must be named Locked.dmg.
+export const DOWNLOAD = `${REPO}/releases/latest/download/Locked.dmg`;
 
 export const TITLE = "Locked: block distracting apps and sites on your Mac";
 export const DESCRIPTION =
-  "A free macOS menu bar app that blocks distracting apps and websites during the hours you choose. Works in Safari, Chrome, Arc, Brave, Edge and Firefox. No account, nothing leaves your Mac.";
+  "A macOS menu bar app that blocks distracting apps and websites during the hours you choose. Works in Safari, Chrome, Arc, Brave, Edge and Firefox. No account, nothing leaves your Mac. Free for now.";
 
 export const FAQ = [
   {
     q: "Is Locked free?",
-    a: "Yes. There is no price, no subscription, no licence key and no account. The source is on GitHub.",
+    a: "Right now, yes. No price, no licence key, no account.",
+  },
+  {
+    q: "Will Locked always be free?",
+    a: "No. Locked is free while it is early. Later versions will need a paid licence, so this is the time to get it.",
+  },
+  {
+    q: "If I get it now, will it keep working?",
+    a: "Yes. The version you install today has no licence check and makes no network requests, so nothing can switch it off later.",
+  },
+  {
+    q: "Is Locked open source?",
+    a: "No. Locked is free to download today, but it is not open source.",
   },
   {
     q: "How do I install it?",
-    a: "For now you build it yourself: clone the repository, run xcodegen in apps/macos, and run the Locked scheme from Xcode. There is no signed, notarized download yet.",
+    a: "Download Locked.dmg, drag Locked to Applications and open it. If macOS blocks it the first time, go to System Settings, Privacy & Security, and click Open Anyway. Then allow Accessibility when Locked asks.",
   },
   {
     q: "Which browsers does site blocking work in?",
-    a: "Safari, and Chromium browsers such as Chrome, Arc, Brave, Edge, Vivaldi and Helium. Firefox-family browsers (Firefox, Zen, LibreWolf, Floorp) are recognised too, but that path has not been tested yet.",
+    a: "Safari, Chromium browsers such as Chrome, Arc, Brave, Edge, Vivaldi and Helium, and Firefox-family browsers such as Firefox, Zen, LibreWolf and Floorp.",
   },
   {
     q: "Does Locked quit my apps?",
@@ -33,7 +47,7 @@ export const FAQ = [
   },
   {
     q: "What stops me from just turning it off?",
-    a: "Ending a session early takes a 60-second countdown in a window that has to stay in front. While a session is active there is no Quit command and its block list cannot be edited. You can still kill the process from Activity Monitor; the friction is deliberate, but light.",
+    a: "Ending a session early takes a 60-second countdown in a window that has to stay in front. While a session is active there is no Quit command and its block list cannot be edited.",
   },
   {
     q: "What permission does it need?",
@@ -45,6 +59,6 @@ export const FAQ = [
   },
   {
     q: "Is there an iPhone or Android version?",
-    a: "Not yet. Both are planned; today Locked is macOS only and needs macOS 15 or later.",
+    a: "Both are planned. Today Locked runs on Mac, on macOS 15 or later.",
   },
 ];

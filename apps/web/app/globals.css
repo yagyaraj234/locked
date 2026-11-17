@@ -358,12 +358,13 @@ button.m-button:active { transform: scale(0.97); }
 .faq { max-width: 800px; }
 .faq summary { cursor: pointer; list-style: none; }
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary::after { content: "+"; margin-left: auto; font: 400 1.25rem/1 var(--font-mono), monospace; color: var(--ink-2); transition: rotate 0.26s var(--ease-out); }
+.faq summary::after { content: "+"; margin-left: auto; font: 400 1.25rem/1 var(--font-mono), monospace; color: var(--ink-2); transition: rotate 0.3s var(--ease-drawer); }
 @media (prefers-reduced-motion: reduce) { .faq summary::after { transition: none; } }
 .faq details[open] summary::after { rotate: 45deg; }
 @supports (interpolate-size: allow-keywords) {
   :root { interpolate-size: allow-keywords; }
-  .faq details::details-content { height: 0; opacity: 0; overflow: clip; transition: height 0.26s var(--ease-out), opacity 0.2s var(--ease-out), content-visibility 0.26s allow-discrete; }
+  /* min-height: the tile is a flex column, and a flex item's automatic minimum is its content height, which holds the box open */
+  .faq details::details-content { height: 0; min-height: 0; opacity: 0; overflow: clip; transition: height 0.3s var(--ease-drawer), opacity 0.3s ease, content-visibility 0.3s allow-discrete; }
   .faq details[open]::details-content { height: auto; opacity: 1; }
   @media (prefers-reduced-motion: reduce) { .faq details::details-content { transition: opacity 0.2s var(--ease-out), content-visibility 0.2s allow-discrete; } }
 }
@@ -374,7 +375,7 @@ button.m-button:active { transform: scale(0.97); }
   background: radial-gradient(circle 560px at 85% 0, color-mix(in srgb, var(--m-tint) 46%, transparent), transparent) var(--m-bg);
 }
 .get p { max-width: 46ch; color: var(--m-ink-2); }
-.get pre { max-width: 100%; overflow-x: auto; padding: 16px 18px; border-radius: 12px; background: rgb(255 255 255 / 0.06); box-shadow: 0 0 0 1px var(--m-line); font: 0.875rem/1.7 var(--font-mono), monospace; }
+.get ol { display: grid; gap: 8px; max-width: 52ch; padding-left: 1.3em; color: var(--m-ink-2); }
 .get .btn-primary { background: #fff; color: #0d0f14; }
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; padding-block: 44px 56px; font-size: 0.9375rem; color: var(--ink-2); }
 .foot nav { display: flex; gap: 22px; }

@@ -1,7 +1,7 @@
 import { Countdown } from "./countdown";
 import { HowDemo } from "./how";
 import icon from "./icon.svg";
-import { DESCRIPTION, FAQ, REPO, SITE_URL } from "./site";
+import { DESCRIPTION, DOWNLOAD, FAQ, REPO, SITE_URL } from "./site";
 
 const LOCK =
   "M12 1.5a5.5 5.5 0 0 0-5.5 5.5v3H6a2.5 2.5 0 0 0-2.5 2.5v7A2.5 2.5 0 0 0 6 22h12a2.5 2.5 0 0 0 2.5-2.5v-7A2.5 2.5 0 0 0 18 10h-.5V7A5.5 5.5 0 0 0 12 1.5Zm-3 8.5V7a3 3 0 0 1 6 0v3H9Z";
@@ -33,13 +33,13 @@ const BARS: [number, number, number, "work" | "night", string?][] = [
 
 const SPECS = [
   ["Requires", "macOS 15 or later"],
-  ["Price", "Free. No subscription, no licence key"],
+  ["Price", "Free for now. Get it before that changes"],
   ["Account", "None"],
   ["Network", "No requests, ever"],
   ["Permission", "Accessibility, to read the front tab’s address"],
   ["Stores", "Your sessions, locally on your Mac"],
   ["Built with", "Swift and SwiftUI, no third-party code"],
-  ["Install", "Build from source in Xcode"],
+  ["Install", "Download, drag to Applications, open"],
 ];
 
 const jsonLd = [
@@ -83,15 +83,15 @@ export default function Home() {
           <a href="#schedule">Schedule</a>
           <a href="#faq">Questions</a>
         </nav>
-        <a className="btn btn-primary btn-sm" href={REPO}>
-          Get Locked
+        <a className="btn btn-primary btn-sm" href={DOWNLOAD}>
+          Get it free
         </a>
       </header>
 
       <main id="main">
         <section className="hero wrap" id="top" aria-labelledby="hero-title">
           <p className="chip">
-            <span>Free</span> macOS 15 or later, no account
+            <span>Free for now</span> macOS 15 or later, no account
           </p>
           <h1 id="hero-title">Block distracting apps and sites on your Mac.</h1>
           <p className="lede">
@@ -99,8 +99,8 @@ export default function Home() {
             blocked apps hide behind your goal and blocked sites are turned away in any browser.
           </p>
           <div className="actions">
-            <a className="btn btn-primary" href={REPO}>
-              Get it on GitHub
+            <a className="btn btn-primary" href={DOWNLOAD}>
+              Get it while it’s free
             </a>
             <a className="btn" href="#how">
               See how it works
@@ -335,8 +335,8 @@ export default function Home() {
               <p className="tile-panel">An active session’s apps, sites, goal and schedule can’t be edited. You can’t quietly remove the one you’re craving.</p>
             </div>
             <div className="tile">
-              <h3>Honest about its limits</h3>
-              <p className="tile-panel">Anyone can still kill the process from Activity Monitor. Locked adds friction. It is not a jail.</p>
+              <h3>Your work stays safe</h3>
+              <p className="tile-panel">A blocked app is hidden behind your goal, never force-quit. Nothing unsaved is lost.</p>
             </div>
           </div>
         </section>
@@ -362,7 +362,6 @@ export default function Home() {
               <h3>What it leaves out</h3>
               <ul className="tile-panel">
                 <li>Accounts and sign-in</li>
-                <li>Subscriptions and licence keys</li>
                 <li>Streaks, scores and insights</li>
                 <li>Notifications</li>
                 <li>Soundscapes</li>
@@ -397,15 +396,15 @@ export default function Home() {
         <section className="wrap" id="get" aria-labelledby="get-title">
           <div className="get">
             <img src={icon.src} alt="" width={72} height={72} />
-            <h2 id="get-title">Get Locked.</h2>
-            <p>Free, and yours to read. Build it once in Xcode and it opens at login from then on.</p>
-            <pre>
-              <code>
-                {`git clone ${REPO}.git\ncd locked/apps/macos\nbrew install xcodegen && xcodegen\nopen Locked.xcodeproj`}
-              </code>
-            </pre>
-            <a className="btn btn-primary" href={REPO}>
-              Get it on GitHub
+            <h2 id="get-title">Get Locked while it’s free.</h2>
+            <p>Free today, not forever. Three steps and it opens at login from then on.</p>
+            <ol>
+              <li>Download Locked.dmg and drag Locked to Applications.</li>
+              <li>Open it. If macOS blocks it the first time, go to System Settings › Privacy &amp; Security and click Open Anyway.</li>
+              <li>Allow Accessibility when Locked asks. That’s it.</li>
+            </ol>
+            <a className="btn btn-primary" href={DOWNLOAD}>
+              Download Locked
             </a>
           </div>
         </section>
@@ -414,7 +413,7 @@ export default function Home() {
       <footer className="wrap foot">
         <p>Locked. A website and app blocker for macOS.</p>
         <nav aria-label="Footer">
-          <a href={REPO}>Source</a>
+          <a href={REPO}>GitHub</a>
           <a href={`${REPO}/issues`}>Issues</a>
           <a href="#faq">Questions</a>
         </nav>

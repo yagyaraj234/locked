@@ -24,7 +24,7 @@ export default function Image() {
           Block distracting apps and sites on your Mac.
         </div>
         <div style={{ marginTop: 40, fontSize: 32, color: "rgba(255,255,255,0.6)" }}>
-          Free menu bar app. No account. Nothing leaves your Mac.
+          Free for now. No account. Nothing leaves your Mac.
         </div>
       </div>
     ),
