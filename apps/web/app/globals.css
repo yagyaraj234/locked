@@ -375,8 +375,29 @@ button.m-button:active { transform: scale(0.97); }
   background: radial-gradient(circle 560px at 85% 0, color-mix(in srgb, var(--m-tint) 46%, transparent), transparent) var(--m-bg);
 }
 .get p { max-width: 46ch; color: var(--m-ink-2); }
-.get ol { display: grid; gap: 8px; max-width: 52ch; padding-left: 1.3em; color: var(--m-ink-2); }
-.get .btn-primary { background: #fff; color: #0d0f14; }
+.get > .btn-primary { background: #fff; color: #0d0f14; }
+
+/* Download dialog */
+.dl {
+  width: min(480px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); text-align: start; box-shadow: 0 0 0 1px var(--line), 0 40px 80px -30px rgb(10 6 30 / 0.6);
+}
+.dl::backdrop { background: rgb(10 8 20 / 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.dl-body { position: relative; display: grid; gap: 16px; padding: 28px; }
+.dl h2 { font-size: 1.625rem; }
+.dl p, .dl ol { font-size: 0.9375rem; color: var(--ink-2); }
+.dl ol { display: grid; gap: 6px; padding-left: 1.3em; list-style: decimal; }
+.dl-cmd { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 12px; background: var(--m-bg); color: var(--m-ink); box-shadow: 0 0 0 1px var(--m-line); }
+.dl-cmd code { flex: 1; overflow-x: auto; white-space: nowrap; font: 0.8125rem/1.7 var(--font-mono), monospace; }
+.dl-cmd button { min-width: 68px; min-height: 32px; border: 0; border-radius: 8px; background: rgb(255 255 255 / 0.12); color: inherit; font: 600 0.8125rem/1 var(--font-sans), sans-serif; cursor: pointer; }
+.dl-close { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: none; color: var(--ink-2); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.dl-close:hover { background: var(--line); color: var(--ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .dl { transition: opacity 0.2s var(--ease-out), scale 0.2s var(--ease-out), overlay 0.2s allow-discrete, display 0.2s allow-discrete; opacity: 0; scale: 0.96; }
+  .dl[open] { opacity: 1; scale: 1; }
+  @starting-style { .dl[open] { opacity: 0; scale: 0.96; } }
+}
+
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; padding-block: 44px 56px; font-size: 0.9375rem; color: var(--ink-2); }
 .foot nav { display: flex; gap: 22px; }
 .foot a { text-decoration: none; }

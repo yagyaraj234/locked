@@ -27,7 +27,7 @@ export const FAQ = [
   },
   {
     q: "How do I install it?",
-    a: "Download Locked.dmg, drag Locked to Applications and open it. If macOS blocks it the first time, go to System Settings, Privacy & Security, and click Open Anyway. Then allow Accessibility when Locked asks.",
+    a: "Download Locked.dmg and drag Locked to Applications. Locked is not signed with Apple yet, so run xattr -cr /Applications/Locked.app in Terminal once. Then open Locked and allow Accessibility when it asks.",
   },
   {
     q: "Which browsers does site blocking work in?",

@@ -1,7 +1,8 @@
 import { Countdown } from "./countdown";
 import { HowDemo } from "./how";
 import icon from "./icon.svg";
-import { DESCRIPTION, DOWNLOAD, FAQ, REPO, SITE_URL } from "./site";
+import { Download } from "./download";
+import { DESCRIPTION, FAQ, REPO, SITE_URL } from "./site";
 
 const LOCK =
   "M12 1.5a5.5 5.5 0 0 0-5.5 5.5v3H6a2.5 2.5 0 0 0-2.5 2.5v7A2.5 2.5 0 0 0 6 22h12a2.5 2.5 0 0 0 2.5-2.5v-7A2.5 2.5 0 0 0 18 10h-.5V7A5.5 5.5 0 0 0 12 1.5Zm-3 8.5V7a3 3 0 0 1 6 0v3H9Z";
@@ -83,9 +84,9 @@ export default function Home() {
           <a href="#schedule">Schedule</a>
           <a href="#faq">Questions</a>
         </nav>
-        <a className="btn btn-primary btn-sm" href={DOWNLOAD}>
+        <Download className="btn btn-primary btn-sm">
           Get it free
-        </a>
+        </Download>
       </header>
 
       <main id="main">
@@ -99,9 +100,9 @@ export default function Home() {
             blocked apps hide behind your goal and blocked sites are turned away in any browser.
           </p>
           <div className="actions">
-            <a className="btn btn-primary" href={DOWNLOAD}>
+            <Download className="btn btn-primary">
               Get it while it’s free
-            </a>
+            </Download>
             <a className="btn" href="#how">
               See how it works
             </a>
@@ -397,15 +398,10 @@ export default function Home() {
           <div className="get">
             <img src={icon.src} alt="" width={72} height={72} />
             <h2 id="get-title">Get Locked while it’s free.</h2>
-            <p>Free today, not forever. Three steps and it opens at login from then on.</p>
-            <ol>
-              <li>Download Locked.dmg and drag Locked to Applications.</li>
-              <li>Open it. If macOS blocks it the first time, go to System Settings › Privacy &amp; Security and click Open Anyway.</li>
-              <li>Allow Accessibility when Locked asks. That’s it.</li>
-            </ol>
-            <a className="btn btn-primary" href={DOWNLOAD}>
+            <p>Free today, not forever. Install it once and it opens at login from then on.</p>
+            <Download className="btn btn-primary">
               Download Locked
-            </a>
+            </Download>
           </div>
         </section>
       </main>
