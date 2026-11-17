@@ -8,6 +8,7 @@ struct SettingsView: View {
 
     private enum Selection: Hashable {
         case everySession
+        case blockScreen
         case session(UUID)
     }
 
@@ -15,6 +16,7 @@ struct SettingsView: View {
         NavigationSplitView {
             List(selection: $selection) {
                 Label("Every Session", systemImage: "square.stack.3d.up").tag(Selection.everySession)
+                Label("Block Screen", systemImage: "photo").tag(Selection.blockScreen)
                 Section("Sessions") {
                     ForEach(model.sessions) { session in
                         Label(session.name.isEmpty ? "Untitled" : session.name,
@@ -42,6 +44,8 @@ struct SettingsView: View {
         } detail: {
             if selection == .everySession {
                 EverySessionEditor()
+            } else if selection == .blockScreen {
+                BlockScreenEditor()
             } else if let session = model.sessions.first(where: { selection == .session($0.id) }) {
                 SessionEditor(session: session, locked: model.isActive(session.id))
                     .id(session.id)
@@ -112,6 +116,57 @@ private struct EverySessionEditor: View {
     }
 }
 
+/// The picture behind every block. Never locked: it changes how a block looks, not what is blocked.
+private struct BlockScreenEditor: View {
+    @Environment(AppModel.self) private var model
+    @State private var photo = NSImage(contentsOf: Backdrop.image())
+    @State private var failed = false
+
+    var body: some View {
+        Form {
+            Section {
+                if let photo {
+                    Image(nsImage: photo)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 180)
+                        .clipShape(.rect(cornerRadius: 8))
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("Current background")
+                }
+                HStack {
+                    Button("Choose Image…", action: choose)
+                    if photo != nil { Button("Remove", action: remove) }
+                    Spacer()
+                    Button("Preview") { model.previewBlockScreen() }
+                }
+                if failed {
+                    Label("Couldn't open that image.", systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                }
+            } header: {
+                Text("Background")
+            } footer: {
+                Text("Your own picture behind the goal, whenever an app or site is blocked.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        failed = (try? Backdrop.set(from: url)) == nil
+        if !failed { photo = NSImage(contentsOf: Backdrop.image()) }
+    }
+
+    private func remove() {
+        Backdrop.remove()
+        photo = nil
+        failed = false
+    }
+}
+
 /// The Apps and Sites sections, shared by a session and the every-session list.
 struct BlockListSections: View {
     @Binding var apps: [String]
@@ -141,19 +196,20 @@ struct BlockListSections: View {
         HStack {
             Text(title)
             Spacer()
-            Button("Remove", systemImage: "minus.circle", action: remove)
+            Button("Remove", systemImage: "minus.circle") { withAnimation(.easeOut(duration: 0.2), remove) }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
         }
     }
 
     private func pickApps() {
-        apps += chooseApps().filter { !apps.contains($0) }
+        let picked = chooseApps().filter { !apps.contains($0) }
+        withAnimation(.easeOut(duration: 0.2)) { apps += picked }
     }
 
     private func addSite() {
         guard let rule = SiteRule(parsing: newSite) else { return }
-        if !sites.contains(rule) { sites.append(rule) }
+        if !sites.contains(rule) { withAnimation(.easeOut(duration: 0.2)) { sites.append(rule) } }
         newSite = ""
     }
 }
@@ -164,7 +220,9 @@ struct ScheduleSection: View {
 
     var body: some View {
         Section("Schedule") {
-            Toggle("Repeat weekly", isOn: Binding { schedule != nil } set: { schedule = $0 ? Schedule() : nil })
+            Toggle("Repeat weekly", isOn: Binding { schedule != nil } set: { on in
+                withAnimation(.easeOut(duration: 0.2)) { schedule = on ? Schedule() : nil }
+            })
             if let schedule = Binding($schedule) {
                 HStack {
                     ForEach(1...7, id: \.self) { weekday in

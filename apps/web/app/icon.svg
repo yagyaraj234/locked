@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!-- Source for the app icon. Regenerate the PNGs with design/make-icon.sh -->
+<defs>
+<linearGradient id="tm-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: #A584FF"></stop><stop offset="1" style="stop-color: #4520BE"></stop></linearGradient>
+<radialGradient id="tm-glow" cx="0.28" cy="0.02" r="0.95"><stop offset="0" style="stop-color: #FFFFFF; stop-opacity: 0.42"></stop><stop offset="0.6" style="stop-color: #FFFFFF; stop-opacity: 0"></stop></radialGradient>
+<linearGradient id="tm-rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: #FFFFFF; stop-opacity: 0.7"></stop><stop offset="0.45" style="stop-color: #FFFFFF; stop-opacity: 0"></stop><stop offset="1" style="stop-color: #000000; stop-opacity: 0.35"></stop></linearGradient>
+<linearGradient id="tm-metal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: #FFFFFF"></stop><stop offset="0.5" style="stop-color: #DCD3FA"></stop><stop offset="1" style="stop-color: #9C8AD8"></stop></linearGradient>
+<linearGradient id="tm-metal-in" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: #7D6BC0"></stop><stop offset="1" style="stop-color: #F1ECFF"></stop></linearGradient>
+<radialGradient id="tm-face" cx="0.5" cy="0.42" r="0.6"><stop offset="0" style="stop-color: #3B2596"></stop><stop offset="1" style="stop-color: #150840"></stop></radialGradient>
+<linearGradient id="tm-wedge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: #FFFFFF"></stop><stop offset="1" style="stop-color: #C9B8FF"></stop></linearGradient>
+<linearGradient id="tm-hand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: #FF9A78"></stop><stop offset="1" style="stop-color: #EE3F2C"></stop></linearGradient>
+<linearGradient id="tm-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: #FFFFFF; stop-opacity: 0.32"></stop><stop offset="1" style="stop-color: #FFFFFF; stop-opacity: 0.02"></stop></linearGradient>
+<filter id="tm-blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="20"></feGaussianBlur></filter>
+<filter id="tm-blur-s" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"></feGaussianBlur></filter>
+</defs>
+<rect x="100" y="128" width="824" height="824" rx="185" fill="#000000" filter="url(#tm-blur)" style="opacity: 0.32"></rect>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tm-bg)"></rect>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tm-glow)"></rect>
+<rect x="105" y="105" width="814" height="814" rx="180" stroke="url(#tm-rim)" style="fill: none; stroke-width: 10"></rect>
+<rect x="476" y="182" width="72" height="34" rx="12" fill="url(#tm-metal)"></rect>
+<rect x="456" y="206" width="112" height="54" rx="16" fill="url(#tm-metal)"></rect>
+<rect x="456" y="240" width="112" height="20" fill="#5B3FC0" style="opacity: 0.35"></rect>
+<circle cx="512" cy="566" r="296" fill="#12063F" filter="url(#tm-blur)" style="opacity: 0.6"></circle>
+<circle cx="512" cy="530" r="296" fill="url(#tm-metal)"></circle>
+<circle cx="512" cy="530" r="290" stroke="#FFFFFF" style="fill: none; stroke-width: 4; opacity: 0.6"></circle>
+<circle cx="512" cy="530" r="270" fill="url(#tm-metal-in)"></circle>
+<circle cx="512" cy="530" r="256" fill="url(#tm-face)"></circle>
+<circle cx="512" cy="530" r="254" stroke="#07021F" style="fill: none; stroke-width: 6; opacity: 0.55"></circle>
+<circle cx="512" cy="530" r="228" stroke="#FFFFFF" style="fill: none; stroke-width: 16; stroke-dasharray: 4 19.876; stroke-dashoffset: 2; opacity: 0.45"></circle>
+<circle cx="512" cy="530" r="224" stroke="#FFFFFF" style="fill: none; stroke-width: 28; stroke-dasharray: 10 107.286; stroke-dashoffset: 5; opacity: 0.95"></circle>
+<path d="M512 542 L512 354 A188 188 0 1 1 324 542 Z" fill="#070122" filter="url(#tm-blur-s)" style="opacity: 0.6"></path>
+<path d="M512 530 L512 342 A188 188 0 1 1 324 530 Z" fill="url(#tm-wedge)"></path>
+<path d="M512 530 L512 342 A188 188 0 0 1 700 530 Z" fill="#FFFFFF" style="opacity: 0.35"></path>
+<rect x="296" y="527" width="236" height="24" rx="12" fill="#070122" filter="url(#tm-blur-s)" style="opacity: 0.55"></rect>
+<rect x="296" y="518" width="236" height="24" rx="12" fill="url(#tm-hand)"></rect>
+<rect x="304" y="521" width="220" height="5" rx="2.5" fill="#FFFFFF" style="opacity: 0.45"></rect>
+<circle cx="512" cy="538" r="42" fill="#070122" filter="url(#tm-blur-s)" style="opacity: 0.5"></circle>
+<circle cx="512" cy="530" r="42" fill="url(#tm-metal)"></circle>
+<circle cx="512" cy="530" r="30" fill="url(#tm-metal-in)"></circle>
+<circle cx="512" cy="530" r="14" fill="#2A1570"></circle>
+<path d="M273 480 A244 244 0 0 1 751 480 Q512 392 273 480 Z" fill="url(#tm-gloss)"></path>
+</svg>

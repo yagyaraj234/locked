@@ -16,6 +16,11 @@
   h1 { margin: 0; max-width: 18ch; font-size: clamp(36px, 6vw, 64px); line-height: 1.05; letter-spacing: -0.02em;
        text-wrap: balance; overflow-wrap: anywhere; }
   footer { grid-row: 3; align-self: end; font-size: 14px; color: rgb(255 255 255 / 0.35); }
+  /* The user's own picture, when the app has put one beside this page. */
+  body.photo { background: linear-gradient(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.4)), url(background.jpg) center / cover #0d0f14; }
+  body.photo svg, body.photo .label { display: none; }
+  body.photo h1 { text-shadow: 0 2px 24px rgb(0 0 0 / 0.5); }
+  body.photo footer { color: rgb(255 255 255 / 0.7); }
   @keyframes in { from { opacity: 0; transform: translateY(12px); } }
   @media (prefers-reduced-motion: reduce) { main { animation: none; } }
 </style>
@@ -28,4 +33,8 @@
 <script>
   // The goal arrives percent-encoded in the fragment; textContent keeps it inert.
   document.getElementById("goal").textContent = decodeURIComponent(location.hash.slice(1)) || "Back to work";
+  // Only once it has loaded: in the app bundle there is no picture, and the standard look stays.
+  const photo = new Image();
+  photo.onload = () => document.body.classList.add("photo");
+  photo.src = "background.jpg";
 </script>
